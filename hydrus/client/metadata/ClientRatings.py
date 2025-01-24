@@ -122,6 +122,7 @@ def GetLikeStateFromMedia( media, service_key ):
         return MIXED
         
     
+
 def GetLikeStateFromRating( rating ):
     
     if rating == 1: return LIKE

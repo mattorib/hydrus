@@ -119,6 +119,8 @@ def GenerateDefaultServiceDictionary( service_type ):
         from hydrus.client.gui import ClientGUIRatings
         
         dictionary[ 'colours' ] = []
+        dictionary[ 'show_in_thumbnail' ] = False
+        dictionary[ 'show_in_thumbnail_even_when_null' ] = False
         
         if service_type in HC.STAR_RATINGS_SERVICES:
             
@@ -132,7 +134,7 @@ def GenerateDefaultServiceDictionary( service_type ):
                 
                 dictionary[ 'colours' ] = list( ClientGUIRatings.default_numerical_colours.items() )
                 dictionary[ 'num_stars' ] = 5
-                dictionary[ 'allow_zero' ]= True
+                dictionary[ 'allow_zero' ] = True
                 
             
         
@@ -517,7 +519,8 @@ class ServiceLocalRating( Service ):
         dictionary = Service._GetSerialisableDictionary( self )
         
         dictionary[ 'colours' ] = list(self._colours.items())
-        
+        dictionary[ 'show_in_thumbnail' ] = self._show_in_thumbnail
+        dictionary[ 'show_in_thumbnail_even_when_null' ] = self._show_in_thumbnail_even_when_null        
         return dictionary
         
     
@@ -526,6 +529,8 @@ class ServiceLocalRating( Service ):
         Service._LoadFromDictionary( self, dictionary )
         
         self._colours = dict( dictionary[ 'colours' ] )
+        self._show_in_thumbnail = dictionary[ 'show_in_thumbnail' ]
+        self._show_in_thumbnail_even_when_null = dictionary[ 'show_in_thumbnail_even_when_null' ]
         
     
     def GetColour( self, rating_state ):
@@ -533,6 +538,22 @@ class ServiceLocalRating( Service ):
         with self._lock:
             
             return self._colours[ rating_state ]
+            
+        
+
+    def GetShowInThumbnail( self ):
+        
+        with self._lock:
+            
+            return self._show_in_thumbnail
+            
+        
+    
+    def GetShowInThumbnailEvenWhenNull( self ):
+        
+        with self._lock:
+            
+            return self._show_in_thumbnail_even_when_null
             
         
     

@@ -33,10 +33,12 @@ from hydrus.client.gui import QtPorting as QP
 from hydrus.client.gui.canvas import ClientGUICanvas
 from hydrus.client.gui.canvas import ClientGUICanvasFrame
 from hydrus.client.gui.duplicates import ClientGUIDuplicateActions
+from hydrus.client.gui.duplicates import ClientGUIDuplicatesContentMergeOptions
 from hydrus.client.gui.media import ClientGUIMediaSimpleActions
 from hydrus.client.gui.media import ClientGUIMediaModalActions
 from hydrus.client.gui.networking import ClientGUIHydrusNetwork
 from hydrus.client.gui.pages import ClientGUIManagementController
+from hydrus.client.gui.panels import ClientGUIScrolledPanels
 from hydrus.client.gui.panels import ClientGUIScrolledPanelsEdit
 from hydrus.client.media import ClientMedia
 from hydrus.client.media import ClientMediaFileFilter
@@ -87,6 +89,11 @@ class MediaResultsPanel( CAC.ApplicationCommandProcessorMixin, ClientMedia.Liste
         self._page_key = page_key
         self._management_controller = management_controller
         
+        # TODO: Assuming the canvas listeningmedialist refactoring went well, this guy is next
+        # take out the class inheritance, instead create a (non-listening) self._media_list, and fix all method calls to self._GetFirst and so on to instead point at that
+        # rewrite process(content/service)updates to update the list as needed
+        # delete the listeningmedialist class def
+        
         # TODO: BRUH REWRITE THIS GARBAGE
         # we don't really want to be messing around with *args, **kwargs in __init__/super() gubbins, and this is highlighted as we move to super() and see this is all a mess!!
         # obviously decouple the list from the panel here so we aren't trying to do everything in one class
@@ -114,7 +121,6 @@ class MediaResultsPanel( CAC.ApplicationCommandProcessorMixin, ClientMedia.Liste
         self._empty_page_status_override = None
         
         CG.client_controller.sub( self, 'AddMediaResults', 'add_media_results' )
-        CG.client_controller.sub( self, 'RemoveMedia', 'remove_media' )
         CG.client_controller.sub( self, '_UpdateBackgroundColour', 'notify_new_colourset' )
         CG.client_controller.sub( self, 'SelectByTags', 'select_files_with_tags' )
         
@@ -178,6 +184,7 @@ class MediaResultsPanel( CAC.ApplicationCommandProcessorMixin, ClientMedia.Liste
             canvas_frame.SetCanvas( canvas_window )
             
             canvas_window.exitFocusMedia.connect( self.SetFocusedMedia )
+            canvas_window.userRemovedMedia.connect( self.RemoveMedia )
             
         
     
@@ -866,6 +873,7 @@ class MediaResultsPanel( CAC.ApplicationCommandProcessorMixin, ClientMedia.Liste
             
             canvas_frame.SetCanvas( canvas_window )
             
+            canvas_window.userRemovedMedia.connect( self.RemoveMedia )
             canvas_window.exitFocusMedia.connect( self.SetFocusedMedia )
             
         
@@ -1407,9 +1415,9 @@ class MediaResultsPanel( CAC.ApplicationCommandProcessorMixin, ClientMedia.Liste
                 
             else:
                 
-                first_media_result = media_results[0]
+                media_result_a = media_results[0]
                 
-                media_result_pairs = [ ( first_media_result, other_media_result ) for other_media_result in media_results if other_media_result != first_media_result ]
+                media_result_pairs = [ ( media_result_a, media_result_b ) for media_result_b in media_results if media_result_b != media_result_a ]
                 
             
         else:
@@ -1484,26 +1492,26 @@ class MediaResultsPanel( CAC.ApplicationCommandProcessorMixin, ClientMedia.Liste
         
         for is_first_run in ( True, False ):
             
-            for ( first_media_result, second_media_result ) in media_result_pairs:
+            for ( media_result_a, media_result_b ) in media_result_pairs:
                 
-                first_hash = first_media_result.GetHash()
-                second_hash = second_media_result.GetHash()
+                hash_a = media_result_a.GetHash()
+                hash_b = media_result_b.GetHash()
                 
-                if first_hash not in hashes_to_duplicated_media_results:
+                if hash_a not in hashes_to_duplicated_media_results:
                     
-                    hashes_to_duplicated_media_results[ first_hash ] = first_media_result.Duplicate()
-                    
-                
-                first_duplicated_media_result = hashes_to_duplicated_media_results[ first_hash ]
-                
-                if second_hash not in hashes_to_duplicated_media_results:
-                    
-                    hashes_to_duplicated_media_results[ second_hash ] = second_media_result.Duplicate()
+                    hashes_to_duplicated_media_results[ hash_a ] = media_result_a.Duplicate()
                     
                 
-                second_duplicated_media_result = hashes_to_duplicated_media_results[ second_hash ]
+                first_duplicated_media_result = hashes_to_duplicated_media_results[ hash_a ]
                 
-                content_update_packages = hash_pairs_to_content_update_packages[ ( first_hash, second_hash ) ]
+                if hash_b not in hashes_to_duplicated_media_results:
+                    
+                    hashes_to_duplicated_media_results[ hash_b ] = media_result_b.Duplicate()
+                    
+                
+                second_duplicated_media_result = hashes_to_duplicated_media_results[ hash_b ]
+                
+                content_update_packages = hash_pairs_to_content_update_packages[ ( hash_a, hash_b ) ]
                 
                 if duplicate_content_merge_options is not None:
                     
@@ -1522,12 +1530,12 @@ class MediaResultsPanel( CAC.ApplicationCommandProcessorMixin, ClientMedia.Liste
                             
                             hashes = content_update.GetHashes()
                             
-                            if first_hash in hashes:
+                            if hash_a in hashes:
                                 
                                 first_duplicated_media_result.ProcessContentUpdate( service_key, content_update )
                                 
                             
-                            if second_hash in hashes:
+                            if hash_b in hashes:
                                 
                                 second_duplicated_media_result.ProcessContentUpdate( service_key, content_update )
                                 
@@ -1540,7 +1548,7 @@ class MediaResultsPanel( CAC.ApplicationCommandProcessorMixin, ClientMedia.Liste
                     continue
                     
                 
-                pair_info.append( ( duplicate_type, first_hash, second_hash, content_update_packages ) )
+                pair_info.append( ( duplicate_type, hash_a, hash_b, content_update_packages ) )
                 
             
         
@@ -1580,13 +1588,17 @@ class MediaResultsPanel( CAC.ApplicationCommandProcessorMixin, ClientMedia.Liste
         
         with ClientGUITopLevelWindowsPanels.DialogEdit( self, 'edit duplicate merge options' ) as dlg:
             
-            panel = ClientGUIScrolledPanelsEdit.EditDuplicateContentMergeOptionsPanel( dlg, duplicate_type, duplicate_content_merge_options, for_custom_action = True )
+            panel = ClientGUIScrolledPanels.EditSingleCtrlPanel( dlg )
+            
+            ctrl = ClientGUIDuplicatesContentMergeOptions.EditDuplicateContentMergeOptionsWidget( panel, duplicate_type, duplicate_content_merge_options, for_custom_action = True )
+            
+            panel.SetControl( ctrl )
             
             dlg.SetPanel( panel )
             
             if dlg.exec() == QW.QDialog.DialogCode.Accepted:
                 
-                duplicate_content_merge_options = panel.GetValue()
+                duplicate_content_merge_options = ctrl.GetValue()
                 
                 if duplicate_type == HC.DUPLICATE_BETTER:
                     
@@ -2479,12 +2491,9 @@ class MediaResultsPanel( CAC.ApplicationCommandProcessorMixin, ClientMedia.Liste
         self._PublishSelectionChange()
         
     
-    def RemoveMedia( self, page_key, hashes ):
+    def RemoveMedia( self, hashes ):
         
-        if page_key == self._page_key:
-            
-            self._RemoveMediaByHashes( hashes )
-            
+        self._RemoveMediaByHashes( hashes )
         
     
     def SelectByTags( self, page_key, tag_service_key, and_or_or, tags ):
