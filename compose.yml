@@ -1,0 +1,27 @@
+services:
+  hydrusclient:
+    build:
+      context: .
+      dockerfile: ./static/build_files/docker/client/Dockerfile
+    container_name: hydrusclient
+    restart: unless-stopped
+    volumes:
+      - hydrus-client:/opt/hydrus/db
+    tmpfs:
+      - /tmp
+    ports:
+      # - 5800:5800   #noVNC
+      # - 5900:5900   #VNC
+      # - 45868:45868 #Booru
+      - 45869:45869 #API
+      - 8880:8080
+      - "52000-52100:52000-52100/udp"
+    environment:
+      UID: 1000
+      GID: 1000
+      NEKO_PASSWORD: neko
+      NEKO_PASSWORD_ADMIN: admin
+      NEKO_EPR: 52000-52100
+volumes:
+  hydrus-client:
+    driver: local

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 USER_ID=${UID}
 GROUP_ID=${GID}
@@ -45,4 +45,4 @@ cd /opt/hydrus/
 #  find /opt/hydrus/ -not -path "/opt/hydrus/db/*" -exec chown hydrus:hydrus "{}" \;
 #fi
 
-exec supervisord -c /etc/supervisord.conf
+exec supervisord -c /etc/neko/supervisord.conf
