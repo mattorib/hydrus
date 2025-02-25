@@ -41,6 +41,7 @@ db_synchronous = 2
 import_folders_running = False
 export_folders_running = False
 
+boot_with_network_traffic_paused_command_line = False
 profile_mode = False
 
 db_profile_min_job_time_ms = 16
@@ -83,6 +84,8 @@ network_report_mode_silent = False
 pubsub_report_mode = False
 daemon_report_mode = False
 mpv_report_mode = False
+
+fake_petition_mode = False
 
 force_idle_mode = False
 thumbnail_debug_mode = False

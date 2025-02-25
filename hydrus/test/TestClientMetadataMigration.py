@@ -8,7 +8,6 @@ from hydrus.core import HydrusText
 from hydrus.core import HydrusTime
 
 from hydrus.client import ClientConstants as CC
-from hydrus.client import ClientParsing
 from hydrus.client import ClientStrings
 from hydrus.client import ClientTime
 from hydrus.client.media import ClientMediaManagers
@@ -18,6 +17,7 @@ from hydrus.client.metadata import ClientMetadataMigration
 from hydrus.client.metadata import ClientMetadataMigrationExporters
 from hydrus.client.metadata import ClientMetadataMigrationImporters
 from hydrus.client.metadata import ClientTags
+from hydrus.client.parsing import ClientParsing
 
 from hydrus.test import HelperFunctions as HF
 from hydrus.test import TestGlobals as TG
@@ -67,7 +67,7 @@ class TestSingleFileMetadataRouter( unittest.TestCase ):
         mime = HC.IMAGE_JPEG
         width = 640
         height = 480
-        duration = None
+        duration_ms = None
         num_frames = None
         has_audio = False
         num_words = None
@@ -89,7 +89,7 @@ class TestSingleFileMetadataRouter( unittest.TestCase ):
         
         #
         
-        file_info_manager = ClientMediaManagers.FileInfoManager( 1, hash, size, mime, width, height, duration, num_frames, has_audio, num_words )
+        file_info_manager = ClientMediaManagers.FileInfoManager( 1, hash, size, mime, width, height, duration_ms, num_frames, has_audio, num_words )
         
         media_result = ClientMediaResult.MediaResult( file_info_manager, tags_manager, times_manager, local_locations_manager, ratings_manager, notes_manager, file_viewing_stats_manager )
         
@@ -204,7 +204,7 @@ class TestSingleFileMetadataImporters( unittest.TestCase ):
         mime = HC.IMAGE_JPEG
         width = 640
         height = 480
-        duration = None
+        duration_ms = None
         num_frames = None
         has_audio = False
         num_words = None
@@ -226,7 +226,7 @@ class TestSingleFileMetadataImporters( unittest.TestCase ):
         
         #
         
-        file_info_manager = ClientMediaManagers.FileInfoManager( 1, hash, size, mime, width, height, duration, num_frames, has_audio, num_words )
+        file_info_manager = ClientMediaManagers.FileInfoManager( 1, hash, size, mime, width, height, duration_ms, num_frames, has_audio, num_words )
         
         media_result = ClientMediaResult.MediaResult( file_info_manager, tags_manager, times_manager, local_locations_manager, ratings_manager, notes_manager, file_viewing_stats_manager )
         
@@ -332,7 +332,7 @@ class TestSingleFileMetadataImporters( unittest.TestCase ):
         mime = HC.IMAGE_JPEG
         width = 640
         height = 480
-        duration = None
+        duration_ms = None
         num_frames = None
         has_audio = False
         num_words = None
@@ -358,7 +358,7 @@ class TestSingleFileMetadataImporters( unittest.TestCase ):
         
         #
         
-        file_info_manager = ClientMediaManagers.FileInfoManager( 1, hash, size, mime, width, height, duration, num_frames, has_audio, num_words )
+        file_info_manager = ClientMediaManagers.FileInfoManager( 1, hash, size, mime, width, height, duration_ms, num_frames, has_audio, num_words )
         
         media_result = ClientMediaResult.MediaResult( file_info_manager, tags_manager, times_manager, local_locations_manager, ratings_manager, notes_manager, file_viewing_stats_manager )
         
@@ -399,7 +399,7 @@ class TestSingleFileMetadataImporters( unittest.TestCase ):
         mime = HC.IMAGE_JPEG
         width = 640
         height = 480
-        duration = None
+        duration_ms = None
         num_frames = None
         has_audio = False
         num_words = None
@@ -426,7 +426,7 @@ class TestSingleFileMetadataImporters( unittest.TestCase ):
         
         #
         
-        file_info_manager = ClientMediaManagers.FileInfoManager( 1, hash, size, mime, width, height, duration, num_frames, has_audio, num_words )
+        file_info_manager = ClientMediaManagers.FileInfoManager( 1, hash, size, mime, width, height, duration_ms, num_frames, has_audio, num_words )
         
         media_result = ClientMediaResult.MediaResult( file_info_manager, tags_manager, times_manager, local_locations_manager, ratings_manager, notes_manager, file_viewing_stats_manager )
         

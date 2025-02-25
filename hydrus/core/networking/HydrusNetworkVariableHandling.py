@@ -139,9 +139,7 @@ def DumpToGETQuery( args ):
         
         if name in args:
             
-            PARAM_EXCEPTION_CHARS = "!$&'()*+,;=@:/?"
-            
-            args[ name ] = urllib.parse.quote( args[ name ], safe = PARAM_EXCEPTION_CHARS )
+            args[ name ] = urllib.parse.quote( args[ name ] )
             
         
     
@@ -149,6 +147,7 @@ def DumpToGETQuery( args ):
     
     return query
     
+
 def ParseFileArguments( path, decompression_bombs_ok = False ):
 
     hash = HydrusFileHandling.GetHashFromPath( path )
@@ -165,7 +164,7 @@ def ParseFileArguments( path, decompression_bombs_ok = False ):
                 
             
         
-        ( size, mime, width, height, duration, num_frames, has_audio, num_words ) = HydrusFileHandling.GetFileInfo( path, mime = mime )
+        ( size, mime, width, height, duration_ms, num_frames, has_audio, num_words ) = HydrusFileHandling.GetFileInfo( path, mime = mime )
         
     except Exception as e:
         
@@ -181,7 +180,7 @@ def ParseFileArguments( path, decompression_bombs_ok = False ):
     
     if width is not None: args[ 'width' ] = width
     if height is not None: args[ 'height' ] = height
-    if duration is not None: args[ 'duration' ] = duration
+    if duration_ms is not None: args[ 'duration' ] = duration_ms
     if num_frames is not None: args[ 'num_frames' ] = num_frames
     args[ 'has_audio' ] = has_audio
     if num_words is not None: args[ 'num_words' ] = num_words
@@ -194,7 +193,7 @@ def ParseFileArguments( path, decompression_bombs_ok = False ):
             
             target_resolution = HydrusImageHandling.GetThumbnailResolution( ( width, height ), bounding_dimensions, HydrusImageHandling.THUMBNAIL_SCALE_DOWN_ONLY, 100 )
             
-            thumbnail_bytes = HydrusFileHandling.GenerateThumbnailBytes( path, target_resolution, mime, duration, num_frames )
+            thumbnail_bytes = HydrusFileHandling.GenerateThumbnailBytes( path, target_resolution, mime, duration_ms, num_frames )
             
         except Exception as e:
             
@@ -208,6 +207,7 @@ def ParseFileArguments( path, decompression_bombs_ok = False ):
     
     return args
     
+
 def ParseHydrusNetworkGETArgs( requests_args ):
     
     args = ParseTwistedRequestGETArgs( requests_args, INT_PARAMS, BYTE_PARAMS, STRING_PARAMS, JSON_PARAMS, JSON_BYTE_LIST_PARAMS )
@@ -369,7 +369,7 @@ def ParseTwistedRequestGETArgs( requests_args: dict, int_params, byte_params, st
                 
             except Exception as e:
                 
-                raise HydrusExceptions.BadRequestException( 'I was expecting to parse \'' + name + '\' as a percent-encdode string, but it failed.' ) from e
+                raise HydrusExceptions.BadRequestException( 'I was expecting to parse \'' + name + '\' as a percent-encoded string, but it failed.' ) from e
                 
             
         elif name in json_params:

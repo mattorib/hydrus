@@ -105,8 +105,8 @@ options = {}
 # Misc
 
 NETWORK_VERSION = 20
-SOFTWARE_VERSION = 606
-CLIENT_API_VERSION = 77
+SOFTWARE_VERSION = 610
+CLIENT_API_VERSION = 78
 
 SERVER_THUMBNAIL_DIMENSIONS = ( 200, 200 )
 
@@ -194,12 +194,12 @@ CONTENT_TYPE_DEFINITIONS = 21
 CONTENT_TYPE_HTTP_HEADERS = 22
 
 content_type_string_lookup = {
-    CONTENT_TYPE_MAPPINGS : 'mappings',
+    CONTENT_TYPE_MAPPINGS : 'tag mappings',
     CONTENT_TYPE_TAG_SIBLINGS : 'tag siblings',
     CONTENT_TYPE_TAG_PARENTS : 'tag parents',
     CONTENT_TYPE_FILES : 'files',
     CONTENT_TYPE_RATINGS : 'ratings',
-    CONTENT_TYPE_MAPPING : 'mapping',
+    CONTENT_TYPE_MAPPING : 'tag mapping',
     CONTENT_TYPE_DIRECTORIES : 'directories',
     CONTENT_TYPE_URLS : 'urls',
     CONTENT_TYPE_VETO : 'veto',
@@ -760,6 +760,7 @@ APPLICATION_XLS = 81
 APPLICATION_PPT = 82
 ANIMATION_WEBP = 83
 UNDETERMINED_WEBP = 84
+IMAGE_JXL = 85
 APPLICATION_OCTET_STREAM = 100
 APPLICATION_UNKNOWN = 101
 
@@ -792,6 +793,7 @@ SEARCHABLE_MIMES = {
     IMAGE_AVIF,
     IMAGE_AVIF_SEQUENCE,
     IMAGE_BMP,
+    IMAGE_JXL,
     ANIMATION_UGOIRA,
     APPLICATION_FLASH,
     VIDEO_AVI,
@@ -852,6 +854,7 @@ IMAGES = [
     IMAGE_GIF,
     IMAGE_WEBP,
     IMAGE_AVIF,
+    IMAGE_JXL,
     IMAGE_BMP,
     IMAGE_HEIC,
     IMAGE_HEIF,
@@ -1057,6 +1060,7 @@ mime_enum_lookup = {
     'image/heic-sequence' : IMAGE_HEIC_SEQUENCE,
     'image/avif' : IMAGE_AVIF,
     'image/avif-sequence' : IMAGE_AVIF_SEQUENCE,
+    'image/jxl' : IMAGE_JXL,
     'image/vnd.microsoft.icon' : IMAGE_ICON,
     'image' : IMAGES,
     'application/x-shockwave-flash' : APPLICATION_FLASH,
@@ -1148,6 +1152,7 @@ mime_string_lookup = {
     IMAGE_HEIC_SEQUENCE : 'heic sequence',
     IMAGE_AVIF : 'avif',
     IMAGE_AVIF_SEQUENCE : 'avif sequence',
+    IMAGE_JXL : 'jxl',
     ANIMATION_UGOIRA : 'ugoira',
     APPLICATION_CBZ : 'cbz',
     APPLICATION_FLASH : 'flash',
@@ -1239,6 +1244,7 @@ mime_mimetype_string_lookup = {
     IMAGE_HEIC_SEQUENCE: 'image/heic-sequence',
     IMAGE_AVIF: 'image/avif',
     IMAGE_AVIF_SEQUENCE: 'image/avif-sequence',
+    IMAGE_JXL: 'image/jxl',
     ANIMATION_UGOIRA : 'application/zip',
     APPLICATION_FLASH : 'application/x-shockwave-flash',
     APPLICATION_OCTET_STREAM : 'application/octet-stream',
@@ -1329,6 +1335,7 @@ mime_ext_lookup = {
     IMAGE_HEIC_SEQUENCE: '.heics',
     IMAGE_AVIF: '.avif',
     IMAGE_AVIF_SEQUENCE: '.avifs',
+    IMAGE_JXL : '.jxl',
     ANIMATION_UGOIRA : '.zip',
     APPLICATION_CBZ : '.cbz',   
     APPLICATION_FLASH : '.swf',

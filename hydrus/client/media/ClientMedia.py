@@ -10,6 +10,7 @@ from hydrus.core import HydrusLists
 from hydrus.core import HydrusNumbers
 from hydrus.core import HydrusSerialisable
 from hydrus.core.files import HydrusPSDHandling
+from hydrus.core.files.images import HydrusBlurhash
 
 from hydrus.client import ClientConstants as CC
 from hydrus.client import ClientGlobals as CG
@@ -76,6 +77,19 @@ def FlattenMedia( medias ) -> typing.List[ "MediaSingleton" ]:
         
     
     return flat_media
+    
+
+sort_data_to_blurhash_to_sortable_calls = {
+    CC.SORT_FILES_BY_AVERAGE_COLOUR_LIGHTNESS : HydrusBlurhash.ConvertBlurhashToSortableLightness,
+    CC.SORT_FILES_BY_AVERAGE_COLOUR_CHROMATIC_MAGNITUDE : HydrusBlurhash.ConvertBlurhashToSortableChromaticMagnitude,
+    CC.SORT_FILES_BY_AVERAGE_COLOUR_CHROMATICITY_GREEN_RED : HydrusBlurhash.ConvertBlurhashToSortableGreenRed,
+    CC.SORT_FILES_BY_AVERAGE_COLOUR_CHROMATICITY_BLUE_YELLOW : HydrusBlurhash.ConvertBlurhashToSortableBlueYellow,
+    CC.SORT_FILES_BY_AVERAGE_COLOUR_HUE : HydrusBlurhash.ConvertBlurhashToSortableHue
+}
+
+def GetBlurhashToSortableCall( sort_data: int ):
+    
+    return sort_data_to_blurhash_to_sortable_calls.get( sort_data, HydrusBlurhash.ConvertBlurhashToSortableLightness )
     
 
 def GetMediasTags( pool, tag_service_key, tag_display_type, content_statuses ):
@@ -167,7 +181,7 @@ def GetMediasFiletypeSummaryString( medias: typing.Collection[ "Media" ] ):
         
         num_files = sum( [ media.GetNumFiles() for media in medias ] )
         
-        if num_files > 1000:
+        if num_files > 100000:
             
             filetype_summary = 'files'
             
@@ -1985,9 +1999,7 @@ class MediaSingleton( Media ):
     
     def HasDuration( self ):
         
-        duration = self._media_result.GetDurationMS()
-        
-        return duration is not None and duration > 0
+        return self._media_result.HasDuration()
         
     
     def HasStaticImages( self ):
@@ -2318,6 +2330,24 @@ class MediaSort( HydrusSerialisable.SerialisableBase ):
                         
                     
                 
+            elif sort_data in CC.AVERAGE_COLOUR_FILE_SORTS:
+                
+                blurhash_converter = GetBlurhashToSortableCall( sort_data )
+                
+                def sort_key( x ):
+                    
+                    blurhash = x.GetDisplayMedia().GetMediaResult().GetFileInfoManager().blurhash
+                    
+                    if blurhash is None:
+                        
+                        return ( 0 if reverse else 1, '' )
+                        
+                    else:
+                        
+                        return ( 1 if reverse else 0, blurhash_converter( blurhash, reverse ) )
+                        
+                    
+                
             elif sort_data == CC.SORT_FILES_BY_APPROX_BITRATE:
                 
                 def sort_key( x ):
@@ -2325,12 +2355,12 @@ class MediaSort( HydrusSerialisable.SerialisableBase ):
                     # videos > images > pdfs
                     # heavy vids first, heavy images first
                     
-                    duration = x.GetDurationMS()
+                    duration_ms = x.GetDurationMS()
                     num_frames = x.GetNumFrames()
                     size = x.GetSize()
                     resolution = x.GetResolution()
                     
-                    if duration is None or duration == 0:
+                    if duration_ms is None or duration_ms == 0:
                         
                         if size is None or size == 0:
                             
@@ -2371,7 +2401,7 @@ class MediaSort( HydrusSerialisable.SerialisableBase ):
                             
                         else:
                             
-                            duration_bitrate = size / duration
+                            duration_bitrate = size / duration_ms
                             
                             if num_frames is None or num_frames == 0:
                                 
@@ -2412,14 +2442,14 @@ class MediaSort( HydrusSerialisable.SerialisableBase ):
                         return -1
                         
                     
-                    duration = x.GetDurationMS()
+                    duration_ms = x.GetDurationMS()
                     
-                    if duration is None or duration == 0:
+                    if duration_ms is None or duration_ms == 0:
                         
                         return -1
                         
                     
-                    return num_frames / duration
+                    return num_frames / duration_ms
                     
                 
             elif sort_data == CC.SORT_FILES_BY_NUM_COLLECTION_FILES:
@@ -2541,26 +2571,31 @@ class MediaSort( HydrusSerialisable.SerialisableBase ):
                     return x.GetMime()
                     
                 
-            elif sort_data == CC.SORT_FILES_BY_MEDIA_VIEWS:
+            elif sort_data in ( CC.SORT_FILES_BY_MEDIA_VIEWS, CC.SORT_FILES_BY_MEDIA_VIEWTIME ):
                 
-                def sort_key( x ):
-                    
-                    fvsm = x.GetFileViewingStatsManager()
-                    
-                    # do not do viewtime as a secondary sort here, to allow for user secondary sort to help out
-                    
-                    return fvsm.GetViews( CC.CANVAS_MEDIA_VIEWER )
-                    
+                desired_canvas_types = CG.client_controller.new_options.GetIntegerList( 'file_viewing_stats_interesting_canvas_types' )
                 
-            elif sort_data == CC.SORT_FILES_BY_MEDIA_VIEWTIME:
-                
-                def sort_key( x ):
+                if sort_data == CC.SORT_FILES_BY_MEDIA_VIEWS:
                     
-                    fvsm = x.GetFileViewingStatsManager()
+                    def sort_key( x ):
+                        
+                        fvsm = x.GetFileViewingStatsManager()
+                        
+                        # do not do viewtime as a secondary sort here, to allow for user secondary sort to help out
+                        
+                        return sum( fvsm.GetViews( canvas_type ) for canvas_type in desired_canvas_types )
+                        
                     
-                    # do not do views as a secondary sort here, to allow for user secondary sort to help out
+                else:
                     
-                    return fvsm.GetViewtime( CC.CANVAS_MEDIA_VIEWER )
+                    def sort_key( x ):
+                        
+                        fvsm = x.GetFileViewingStatsManager()
+                        
+                        # do not do views as a secondary sort here, to allow for user secondary sort to help out
+                        
+                        return sum( fvsm.GetViewtimeMS( canvas_type ) for canvas_type in desired_canvas_types )
+                        
                     
                 
             
@@ -2616,6 +2651,11 @@ class MediaSort( HydrusSerialisable.SerialisableBase ):
             sort_string_lookup[ CC.SORT_FILES_BY_PIXEL_HASH ] = ( 'lexicographic', 'reverse lexicographic', CC.SORT_ASC )
             sort_string_lookup[ CC.SORT_FILES_BY_HASH ] = ( 'lexicographic', 'reverse lexicographic', CC.SORT_ASC )
             sort_string_lookup[ CC.SORT_FILES_BY_BLURHASH ] = ( 'lexicographic', 'reverse lexicographic', CC.SORT_ASC )
+            sort_string_lookup[ CC.SORT_FILES_BY_AVERAGE_COLOUR_LIGHTNESS ] = ( 'darkest first', 'lightest first', CC.SORT_DESC )
+            sort_string_lookup[ CC.SORT_FILES_BY_AVERAGE_COLOUR_CHROMATIC_MAGNITUDE ] = ( 'greys first', 'colours first', CC.SORT_DESC )
+            sort_string_lookup[ CC.SORT_FILES_BY_AVERAGE_COLOUR_CHROMATICITY_GREEN_RED ] = ( 'greens first', 'reds first', CC.SORT_ASC )
+            sort_string_lookup[ CC.SORT_FILES_BY_AVERAGE_COLOUR_CHROMATICITY_BLUE_YELLOW ] = ( 'blues first', 'yellows first', CC.SORT_ASC )
+            sort_string_lookup[ CC.SORT_FILES_BY_AVERAGE_COLOUR_HUE ] = ( 'rainbow - red first', 'rainbow - purple first', CC.SORT_ASC )
             sort_string_lookup[ CC.SORT_FILES_BY_WIDTH ] = ( 'slimmest first', 'widest first', CC.SORT_ASC )
             sort_string_lookup[ CC.SORT_FILES_BY_HEIGHT ] = ( 'shortest first', 'tallest first', CC.SORT_ASC )
             sort_string_lookup[ CC.SORT_FILES_BY_RATIO ] = ( 'tallest first', 'widest first', CC.SORT_ASC )

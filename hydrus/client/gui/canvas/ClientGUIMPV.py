@@ -10,6 +10,7 @@ from hydrus.core import HydrusConstants as HC
 from hydrus.core import HydrusData
 from hydrus.core import HydrusGlobals as HG
 from hydrus.core import HydrusPaths
+from hydrus.core import HydrusTime
 from hydrus.core.files import HydrusAnimationHandling
 
 from hydrus.client import ClientApplicationCommand as CAC
@@ -76,10 +77,10 @@ def GetClientAPIVersionString():
         
     '''
 
-def EmergencyDumpOutGlobal( probably_crashy, reason ):
+def EmergencyDumpOutGlobal( problem_widget: QW.QWidget, probably_crashy, too_many_events_queued, reason ):
     
     # this is Qt thread so we can talk to this guy no prob
-    MPVHellBasket.instance().emergencyDumpOut.emit( probably_crashy, reason )
+    MPVHellBasket.instance().emergencyDumpOut.emit( problem_widget, probably_crashy, too_many_events_queued, reason )
     
 
 def log_message_is_fine_bro( message ):
@@ -90,36 +91,51 @@ def log_message_is_fine_bro( message ):
     )
     
 
-def log_handler( loglevel, component, message ):
+def log_handler_factory( mpv_widget: QW.QWidget ):
     
-    # ok important bug dude, if you have multiple mpv windows and hence log handlers, then somehow the mpv dll or python-mpv wrapper is delivering at least some log events to the wrong player's event loop
-    # so my mapping here to preserve the mpv widget for a particular log message and then dump out the player in emergency is only going to work half the time
-    
-    if log_message_is_fine_bro( message ) and not HG.mpv_report_mode:
+    def log_handler( loglevel, component, message ):
         
-        return
+        # ok important bug dude, if you have multiple mpv windows and hence log handlers, then somehow the mpv dll or python-mpv wrapper is delivering at least some log events to the wrong player's event loop
+        # so my mapping here to preserve the mpv widget for a particular log message and then dump out the player in emergency is only going to work half the time
         
-    
-    if loglevel == 'error':
-        
-        if 'ffmpeg' in component:
+        if log_message_is_fine_bro( message ) and not HG.mpv_report_mode:
             
-            probably_crashy_tests = [
-                'Invalid NAL unit size' in message,
-                'Error splitting the input' in message
-            ]
-            
-        else:
-            
-            probably_crashy_tests = [
-                'Too many events queued' in message
-            ]
+            return
             
         
-        CG.client_controller.CallBlockingToQt( CG.client_controller.gui, EmergencyDumpOutGlobal, True in probably_crashy_tests, f'{component}: {message}' )
+        if loglevel == 'error':
+            
+            probably_crashy_tests = []
+            too_many_events_queued_tests = []
+            
+            if 'ffmpeg' in component:
+                
+                probably_crashy_tests = [
+                    'Invalid NAL unit size' in message,
+                    'Error splitting the input' in message
+                ]
+                
+            elif False:
+                
+                # this is the core of the 'too many events' error hook that gave us false positive problems
+                # at the moment, this error will propagate to dumpout and be logged as a generic error, but maybe we'll want to silence it in the end as a 'fine bro' message
+                # instead of catching the logspam, attack the original problem!
+                
+                too_many_events_queued_tests = [
+                    'Too many events queued' in message
+                ]
+                
+            
+            probably_crashy = True in probably_crashy_tests
+            too_many_events_queued = True in too_many_events_queued_tests
+            
+            CG.client_controller.CallBlockingToQt( CG.client_controller.gui, EmergencyDumpOutGlobal, mpv_widget, probably_crashy, too_many_events_queued, f'{component}: {message}' )
+            
+        
+        HydrusData.DebugPrint( '[MPV {}] {}: {}'.format( loglevel, component, message ) )
         
     
-    HydrusData.DebugPrint( '[MPV {}] {}: {}'.format( loglevel, component, message ) )
+    return log_handler
     
 
 MPVShutdownEventType = QP.registerEventType()
@@ -167,7 +183,7 @@ class MPVFileSeekedEvent( QC.QEvent ):
 
 class MPVHellBasket( QC.QObject ):
     
-    emergencyDumpOut = QC.Signal( bool, str )
+    emergencyDumpOut = QC.Signal( QW.QWidget, bool, bool, str )
     my_instance = None
     
     def __init__( self ):
@@ -231,8 +247,12 @@ class MPVWidget( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
         self.setAttribute( QC.Qt.WidgetAttribute.WA_DontCreateNativeAncestors )
         self.setAttribute( QC.Qt.WidgetAttribute.WA_NativeWindow )
         
+        self._time_media_load_started = 0.0
+        
         # loglevels: fatal, error, debug
         loglevel = 'debug' if HG.mpv_report_mode else 'error'
+        
+        log_handler = log_handler_factory( self )
         
         self._player = mpv.MPV(
             wid = str( int( self.winId() ) ),
@@ -250,9 +270,7 @@ class MPVWidget( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
         
         self._previous_conf_content_bytes = b''
         
-        self.UpdateConf()
-        
-        self._player.loop = True
+        self.UpdateConfAndCoreOptions()
         
         # this makes black screen for audio (rather than transparent)
         self._player.force_window = True
@@ -274,6 +292,8 @@ class MPVWidget( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
         
         self._times_to_play_animation = 0
         
+        self._current_second_of_seek_restarts = 0.0
+        self._number_of_restarts_this_second = 0
         self._current_seek_to_start_count = 0
         
         self._InitialiseMPVCallbacks()
@@ -282,7 +302,7 @@ class MPVWidget( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
         
         CG.client_controller.sub( self, 'UpdateAudioMute', 'new_audio_mute' )
         CG.client_controller.sub( self, 'UpdateAudioVolume', 'new_audio_volume' )
-        CG.client_controller.sub( self, 'UpdateConf', 'notify_new_options' )
+        CG.client_controller.sub( self, 'UpdateConfAndCoreOptions', 'notify_new_options' )
         CG.client_controller.sub( self, 'SetLogLevel', 'set_mpv_log_level' )
         
         self.installEventFilter( self )
@@ -360,6 +380,32 @@ class MPVWidget( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
         
         # note that these happen on the mpv mainloop, not UI code, so we need to post events to stay stable
         
+        def event_handler( event: mpv.MpvEvent ):
+            
+            event_type = event.event_id.value
+            
+            if event_type == mpv.MpvEventID.SEEK:
+                
+                QW.QApplication.instance().postEvent( self, MPVFileSeekedEvent() )
+                
+            elif event_type == mpv.MpvEventID.FILE_LOADED:
+                
+                QW.QApplication.instance().postEvent( self, MPVFileLoadedEvent() )
+                
+            elif event_type == mpv.MpvEventID.SHUTDOWN:
+                
+                app = QW.QApplication.instance()
+                
+                if app is not None and QP.isValid( self ):
+                    
+                    app.postEvent( self, MPVShutdownEvent() )
+                    
+                
+            
+        
+        self._player.register_event_callback( event_handler )
+        
+        '''
         @player.event_callback( mpv.MpvEventID.SEEK )
         def seek_event( event ):
             
@@ -382,6 +428,7 @@ class MPVWidget( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
                 app.postEvent( self, MPVShutdownEvent() )
                 
             
+        '''
         '''
         @player.event_callback( mpv.MpvEventID.LOG_MESSAGE )
         def log_event( event ):
@@ -463,9 +510,29 @@ class MPVWidget( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
                 
                 current_timestamp_s = self._player.time_pos
                 
-                if self._media is not None and current_timestamp_s is not None and current_timestamp_s <= 1.0:
+                if self._media is not None and current_timestamp_s is not None and current_timestamp_s < 0.1:
+                    
+                    current_second = HydrusTime.GetNow()
+                    
+                    if current_second != self._current_second_of_seek_restarts:
+                        
+                        self._current_second_of_seek_restarts = current_second
+                        self._number_of_restarts_this_second = 0
+                        
                     
                     self._current_seek_to_start_count += 1
+                    
+                    self._number_of_restarts_this_second += 1
+                    
+                    # if we say no more than 20 restarts allowed, what about the 33ms two-frame animation!
+                    number_of_restarts_allowed = max( 20, ( 1000 / self._media.GetDurationMS() ) * 5 )
+                    
+                    if self._number_of_restarts_this_second > number_of_restarts_allowed:
+                        
+                        self.EmergencyDumpOut( self, True, False, 'This file was caught in a rewind loop, it is probably damaged.' )
+                        
+                        return True
+                        
                     
                     if self._stop_for_slideshow:
                         
@@ -499,24 +566,38 @@ class MPVWidget( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
         return False
         
     
-    def EmergencyDumpOut( self, probably_crashy, reason ):
+    def EmergencyDumpOut( self, problem_widget: QW.QWidget, probably_crashy, too_many_events_queued, reason ):
         
         # we had to rewrite this thing due to some threading/loop/event issues at the lower mpv level
-        # when we have an emergency, we now broadcast to all mpv players at once, they all crash out, to be safe
+        # it now broadcasts to all mpv widgets, so we could unload all on very serious errors, but for now I've hacked in the problem widget handle so we'll only do it for us right now
+        
+        if self != problem_widget:
+            
+            return
+            
         
         original_media = self._media
         
         if original_media is None:
             
-            # this MPV window is probably not the one that had a problem
+            return
+            
+        
+        if too_many_events_queued:
+            # I replaced this with the _number_of_restarts_this_second stuff in the eventFilter on seek spam
+            # TODO: If we have no further use for this, you can delete it from the whole dump-out chain mate
+            
             return
             
         
         media_line = '\n\nIts hash is: {}'.format( original_media.GetHash().hex() )
         
-        if probably_crashy:
+        if probably_crashy or too_many_events_queued:
             
             self.ClearMedia()
+            
+        
+        if probably_crashy:
             
             global damaged_file_hashes
             
@@ -536,7 +617,7 @@ class MPVWidget( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
             
             if probably_crashy:
                 
-                message = f'Sorry, this media appears to have a serious problem! To avoid crashes, MPV will not attempt to play it! The file is possibly truncated or otherwise corrupted, but if you think it is good, please send it to hydev for more testing. The specific errors should be written to the log.{media_line}'
+                message = f'Sorry, this media appears to have a serious problem! To avoid crashes, I have unloaded it and will not allow it again this boot. The file is possibly truncated or otherwise corrupted, but if you think it is good, please send it to hydev for more testing. The specific errors should be written to the log.{media_line}'
                 
                 HydrusData.DebugPrint( message )
                 
@@ -548,6 +629,20 @@ class MPVWidget( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
                 
                 CG.client_controller.pub( 'message', job_status )
                 
+            elif too_many_events_queued:
+                
+                message = f'Sorry, this media appears to have choked MPV! To avoid instability, I have unloaded it! You can try to load it again, but if it fails over and over, please send it to hydev for more testing. If this error happens when the file loops, you might like to try the Playlist-Loop DEBUG checkbox in "options->media playback". The specific errors should be written to the log.{media_line}'
+                
+                HydrusData.DebugPrint( message )
+                
+                ClientGUIDialogsMessage.ShowCritical( self, 'Error', f'{message}\n\nThe first error was:\n\n{reason}' )
+                
+                job_status = ClientThreading.JobStatus()
+                
+                job_status.SetFiles( [ original_media.GetHash() ], 'MPV-choker' )
+                
+                CG.client_controller.pub( 'message', job_status )
+                
             else:
                 
                 message = f'A media loaded in MPV appears to have had an error. This may be not a big deal, or it may be a crash. The specific errors should be written after this message. They are not positively known as crashy, but if you are getting crashes, please send the file and these errors to hydev so he can test his end.{media_line}'
@@ -555,6 +650,7 @@ class MPVWidget( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
                 HydrusData.DebugPrint( message )
                 
             
+        
     
     def GetAnimationBarStatus( self ):
         
@@ -786,7 +882,16 @@ class MPVWidget( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
             return
             
         
-        time_index_s = time_index_ms / 1000
+        time_index_s = HydrusTime.SecondiseMSFloat( time_index_ms )
+        
+        # TODO: could also say like 'if it is between current time +/-5ms to catch odd frame float rounding stuff, but this would need careful testing with previous/next frame navigation etc..
+        # mostly this guy just catches the 0.0 start point
+        if time_index_s == self._player.time_pos:
+            
+            return
+            
+        
+        self._number_of_restarts_this_second = 0 # patching an error hook elsewhere
         
         try:
             
@@ -975,6 +1080,8 @@ class MPVWidget( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
                             
                         
                     
+                    self._time_media_load_started = HydrusTime.GetNowFloat()
+                    
                     try:
                         
                         self._player.loadfile( path )
@@ -1050,7 +1157,13 @@ class MPVWidget( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
             
         
     
-    def UpdateConf( self ):
+    def UpdateConfAndCoreOptions( self ):
+        
+        # this fixes at least instance of the 100% CPU 'too many events queued' bug, which was down to bad APNG EOF rewind navigation
+        loop_playlist = CG.client_controller.new_options.GetBoolean( 'mpv_loop_playlist_instead_of_file' )
+        
+        self._player[ 'loop' ] = not loop_playlist
+        self._player[ 'loop-playlist' ] = loop_playlist
         
         mpv_config_path = CG.client_controller.GetMPVConfPath()
         

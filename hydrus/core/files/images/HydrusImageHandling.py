@@ -27,6 +27,23 @@ except:
     HEIF_OK = False
     
 
+try:
+    
+    import pillow_jxl
+    
+    JXL_OK = True
+    
+    JXL_ERROR_TEXT = 'Jpeg-XL seems fine!'
+    
+except Exception as e:
+    
+    JXL_OK = False
+    
+    import traceback
+    
+    JXL_ERROR_TEXT = traceback.format_exc()
+    
+
 from hydrus.core import HydrusConstants as HC
 from hydrus.core import HydrusData
 from hydrus.core import HydrusExceptions
@@ -83,7 +100,7 @@ CV_IMREAD_FLAGS_WEIRD = CV_IMREAD_FLAGS_PNG
 CV_JPEG_THUMBNAIL_ENCODE_PARAMS = [ cv2.IMWRITE_JPEG_QUALITY, 92 ]
 CV_PNG_THUMBNAIL_ENCODE_PARAMS = [ cv2.IMWRITE_PNG_COMPRESSION, 9 ]
 
-PIL_ONLY_MIMETYPES = { HC.ANIMATION_GIF, HC.IMAGE_ICON, HC.IMAGE_WEBP, HC.IMAGE_QOI, HC.IMAGE_BMP, HC.ANIMATION_WEBP }.union( HC.PIL_HEIF_MIMES )
+PIL_ONLY_MIMETYPES = { HC.ANIMATION_GIF, HC.IMAGE_ICON, HC.IMAGE_WEBP, HC.IMAGE_QOI, HC.IMAGE_BMP, HC.ANIMATION_WEBP, HC.IMAGE_JXL }.union( HC.PIL_HEIF_MIMES )
 
 def MakeClipRectFit( image_resolution, clip_rect ):
     

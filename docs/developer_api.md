@@ -1349,6 +1349,117 @@ Response:
 
 ## Editing File Times
 
+### **POST `/edit_times/increment_file_viewtime`** { id="edit_times_increment_file_viewtime" }
+
+_Add a file view to the file viewing statistics system._
+
+Restricted access: 
+:   YES. Edit Times permission needed.
+    
+Required Headers:
+:       
+    *   `Content-Type`: `application/json`
+    
+Arguments (in percent-encoded JSON):
+:   
+*   [files](#parameters_files)
+*   `canvas_type` : (int, the canvas type you are editing)
+*   `timestamp` : (optional, selective, float or int of the "last viewed time" in seconds)
+*   `timestamp_ms` : (optional, selective, int of the "last viewed time" in milliseconds)
+*   `views` : (optional, int, how many views you are adding, defaults to 1)
+*   `viewtime` : (float, how long the user viewed the file for)
+
+```json title="Example request body; adding a single view"
+{
+  "file_id" : 123456,
+  "canvas_type" : 0,
+  "viewtime" : 8.423
+}
+```
+
+```json title="Example request body; setting the time when the user started viewing the file"
+{
+  "file_id" : 123456,
+  "canvas_type" : 4,
+  "timestamp" : 1738010610.073,
+  "viewtime" : 8.423
+}
+```
+
+```json title="Example request body; sending a batch of views"
+{
+  "file_id" : 123456,
+  "canvas_type" : 4,
+  "timestamp" : 1738010610.073, 
+  "views" : 3,
+  "viewtime" : 31.245
+}
+```
+
+This increments the number of views stored for the file in the file viewing statistics system. This system records "last time the file was viewed", "total number of views", and "total viewtime" for three different `canvas_types`:
+
+*   0 - Media Viewer (the normal viewer in hydrus that is its own window)
+*   1 - Preview Viewer (the box in the bottom-left corner of the Main GUI window)
+*   4 - Client API Viewer (something to represent your own access, if you wish)
+
+It doesn't matter much, but in hydrus the "last time the file was viewed" is considered to be when the user _started_ viewing the file, not ended, so if you wish to track that too, you can send it along. If you do not include a `timestamp`, the system will use _now_, which is close enough, assuming you are sending recent rather than deferred data.
+
+You can send multiple file identifiers, but I imagine you will just be sending one most of the time.
+
+If the user has disabled file viewing statistics tracking on their client (under the options), this will 403.
+
+Response: 
+:   200 and no content.
+
+### **POST `/edit_times/set_file_viewtime`** { id="edit_times_set_file_viewtime" }
+
+_Set fixed values in the file viewing statistics system._
+
+Restricted access: 
+:   YES. Edit Times permission needed.
+    
+Required Headers:
+:       
+    *   `Content-Type`: `application/json`
+    
+Arguments (in percent-encoded JSON):
+:   
+*   [files](#parameters_files)
+*   `canvas_type` : (int, the canvas type you are editing)
+*   `timestamp` : (optional, selective, float or int of the "last viewed time" in seconds)
+*   `timestamp_ms` : (optional, selective, int of the "last viewed time" in milliseconds)
+*   `views` : (int, how many views you are adding)
+*   `viewtime` : (float, how long the user viewed the file for)
+
+```json title="Example request body"
+{
+  "file_id" : 123456,
+  "canvas_type" : 0,
+  "timestamp" : 1738010610.073,
+  "views" : 5,
+  "viewtime" : 184.423
+}
+```
+
+This is an override to set the number of views stored for the file in the file viewing statistics system to fixed values you specify. I recommend you only use this call for unusual maintenance, migration, or reset situations--stick to the [/edit\_times/increment\_file\_viewtime](#edit_times_increment_file_viewtime) call for normal use.
+
+The system records "last time the file was viewed", "total number of views", and "total viewtime" for three different `canvas_types`:
+
+*   0 - Media Viewer (the normal viewer in hydrus that is its own window)
+*   1 - Preview Viewer (the box in the bottom-left corner of the Main GUI window)
+*   4 - Client API Viewer (something to represent your own access, if you wish)
+
+The "Client API" viewer was added so you may record your views separately if you wish. Otherwise you might like to fold them into the normal Media viewer count.
+
+If you do not include a `timestamp`, the system will either leave what is currently recorded, or, if the file has no viewing data yet, fill in with _now_.
+
+You can send multiple file identifiers, but I imagine you will just be sending one.
+
+If the user has disabled file viewing statistics tracking on their client (under the options), this will 403.
+
+Response: 
+:   200 and no content.
+
 ### **POST `/edit_times/set_time`** { id="edit_times_set_time" }
 
 _Add or remove timestamps associated with a file._
@@ -1372,6 +1483,7 @@ Arguments (in percent-encoded JSON):
 
 ```json title="Example request body, simple"
 {
+  "file_id" : 123456,
   "timestamp" : "1641044491",
   "timestamp_type" : 5
 }
@@ -1379,6 +1491,7 @@ Arguments (in percent-encoded JSON):
 
 ```json title="Example request body, more complicated"
 {
+  "file_id" : 123456,
   "timestamp" : "1641044491.458",
   "timestamp_type" : 6,
   "canvas_type" : 1
@@ -1387,6 +1500,7 @@ Arguments (in percent-encoded JSON):
 
 ```json title="Example request body, deleting"
 {
+  "file_id" : 123456,
   "timestamp_ms" : null,
   "timestamp_type" : 0,
   "domain" : "blahbooru.org"
@@ -1422,8 +1536,9 @@ If you select 3, 4, or 7, you have to include a `file_service_key`. The 'previou
 
 If you select 6, you have to include a `canvas_type`, which is:
 
-*   0 - Media viewer
-*   1 - Preview viewer
+*   0 - Media Viewer (the normal viewer in hydrus that is its own window)
+*   1 - Preview Viewer (the box in the bottom-left corner of the Main GUI window)
+*   4 - Client API Viewer (something to represent your own access, if you wish)
 
 Response: 
 :   200 and no content.
@@ -1614,12 +1729,11 @@ Wildcards and namespace searches are supported, so if you search for 'character:
     *   system:num pixels > 50 px
     *   system:num pixels < 1 megapixels
     *   system:num pixels ~= 5 kilopixel
-    *   system:media views ~= 10
-    *   system:all views > 0
-    *   system:preview views < 10
-    *   system:media viewtime < 1 days 1 hour 0 minutes
-    *   system:all viewtime > 1 hours 100 seconds
-    *   system:preview viewtime ~= 1 day 30 hours 100 minutes 90s
+    *   system:views in media ~= 10
+    *   system:views in preview < 10
+    *   system:views > 0
+    *   system:viewtime in client api < 1 days 1 hour 0 minutes
+    *   system:viewtime in media, client api, preview ~= 1 day 30 hours 100 minutes 90s
     *   system:has url matching regex index\\.php
     *   system:does not have a url matching regex index\\.php
     *   system:has url https://safebooru.donmai.us/posts/4695284
@@ -1687,8 +1801,13 @@ file\_sort\_type is by default _import time_. It is an integer according to the 
 * 20 - hash hex (lexicographic/reverse lexicographic)
 * 21 - pixel hash hex (lexicographic/reverse lexicographic)
 * 22 - blurhash (lexicographic/reverse lexicographic)
+* 23 - average colour - lightness (darkest first/lightest first)
+* 24 - average colour - chromatic magnitude (greys first/colours first)
+* 25 - average colour - green/red axis (greens first/reds first)
+* 26 - average colour - blue/yellow axis (blues first/yellows first)
+* 27 - average colour - hue (rainbow - red first/rainbow - purple first)
 
-The pixel and blurhash sorts will put files without one of these (e.g. an mp3) at the end, regardless of asc/desc.
+The pixel, blurhash, and average colour sorts will put files without one of these (e.g. an mp3) at the end, regardless of asc/desc.
 
 Response:
 :   The full list of numerical file ids that match the search.
@@ -1844,7 +1963,30 @@ Response:
           "storage_tags" : {},
           "display_tags" : {}
         }
-      }
+      },
+      "file_viewing_statistics" : [
+        {
+          "canvas_type" : 0,
+          "canvas_type_pretty" : "media viewer",
+          "views" : 0,
+          "viewtime" : 0,
+          "last_viewed_timestamp" : null
+        },
+        {
+          "canvas_type" : 1,
+          "canvas_type_pretty" : "preview viewer",
+          "views" : 0,
+          "viewtime" : 0,
+          "last_viewed_timestamp" : null
+        },
+        {
+          "canvas_type" : 4,
+          "canvas_type_pretty" : "client api viewer",
+          "views" : 0,
+          "viewtime" : 0,
+          "last_viewed_timestamp" : null
+        }
+      ]
     },
     {
       "file_id" : 4567,
@@ -1941,7 +2083,30 @@ Response:
             "1" : ["bodysuit", "clothing"]
           }
         }
-      }
+      },
+      "file_viewing_statistics" : [
+        {
+          "canvas_type" : 0,
+          "canvas_type_pretty" : "media viewer",
+          "views" : 5,
+          "viewtime" : 21.657,
+          "last_viewed_timestamp" : 1738010610.073
+        },
+        {
+          "canvas_type" : 1,
+          "canvas_type_pretty" : "preview viewer",
+          "views" : 8,
+          "viewtime" : 48.657,
+          "last_viewed_timestamp" : 1738010001.895
+        },
+        {
+          "canvas_type" : 4,
+          "canvas_type_pretty" : "client api viewer",
+          "views" : 0,
+          "viewtime" : 0,
+          "last_viewed_timestamp" : null
+        }
+      ]
     }
   ]
 }

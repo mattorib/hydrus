@@ -35,6 +35,197 @@
             <h1 id="changelog"><a href="#changelog">changelog</a></h1>
             <ul>
                 <li>
+                    <h2 id="version_610"><a href="#version_610">version 610</a></h2>
+                    <ul>
+                        <li><h3>misc</h3></li>
+                        <li>files with an average colour with less than 3% saturation in the HSL colour space (i.e. completely greyscale, or otherwise averaging to grey) are now propagated to the end of the Hue sort, whether red or purple first</li>
+                        <li>hitting ctrl+c on a taglist with no selected items now copies all items</li>
+                        <li>updated the system predicate parser so it can read 'number of pixels'. previously, it could only handle 'num pixels'. this means you can copy/paste a 'system:number of pixels' pred back into the autocomplete and it should all work</li>
+                        <li>fixed a problem with `system:num file relationships - (test) "not related/false positive"`, which was only every returning the results of one not-related alternates group, rather than all that matched the test</li>
+                        <li>made some 'click below to copy to clipboard' menu labels bold</li>
+                        <li>the client now says 'tag mappings' explicitly, rather than 'mappings', in a bunch of UI labels like shortcut action descriptions</li>
+                        <li><h3>notes</h3></li>
+                        <li>the 'start editing notes with the text cursor at the end' setting under `options-&gt;notes` now applies to all notes in an 'edit notes' panel with multiple notes</li>
+                        <li>clicking a new note tab in 'edit notes' now immediately focuses the underlying note so you can start typing</li>
+                        <li>if you have made changes, the 'edit notes' panel now confirms if you want to cancel. let me know if this produces false positives--there's some 'note cleaning' stuff I don't account for</li>
+                        <li><h3>file viewing statistics</h3></li>
+                        <li>the new 'client api' views are now integrated into the UI for search, sort, and view</li>
+                        <li>the way file viewing stats are presented in the media right-click menu is simplified. the stuff under `options-&gt;file viewing statistics` is down from five different options to two (show the views summed with a stack of the components in a submenu, or just show the stack of separate count types up front), and there's a new checkbox list with media, preview, and client api views so you can select what you want to see</li>
+                        <li>sorting files by media views now obeys the above 'what you want to see' setting, summing the respective values. previously it just did media views</li>
+                        <li>`system:file viewing statistics` now allows for selection of 'client api views'</li>
+                        <li>`system:file viewing statistics` now renders itself in the form `system:views/viewtime in (domains) (operator) (value)`, where 'domains' is a comma-separated combination of `media`, `preview` and `client api`. previously they were `system:media/preview/all views/viewtime (operator) (value)`</li>
+                        <li>if domains is left blank, I substitute the above 'what you want to see' option, so you can now just type `system:views &gt; 5` and you'll get something reasonable</li>
+                        <li>the old forms still parse but are unchanged and won't support client api</li>
+                        <li>added some new unit tests for this</li>
+                        <li>as a side thing, I did the same pixel-perfect-height update that I did for multi-column lists to most of my checkbox lists across the program, including for canvas view selection around here. they just fit better now</li>
+                        <li>I overhauled some file viewing stats db search code. the predicate still holds some stupid variables that I'll want to rework one day, but the meat of the db search code is now ok</li>
+                        <li><h3>advanced parsing logic and overhaul</h3></li>
+                        <li>subsidiary page parsers have a new 'sort posts by source time' checkbox, default off, which sorts what this subsidiary parser chops up according to any parsed source time, newest first. use this if you are, obviously, parsing things that each have a source time you'd like to sort by but which come in some other order, e.g. you have two individually sorted pages of results in one document and you'd like to interleave them</li>
+                        <li>wrote up proper objects to hold 'parsable content description', 'parsed content', and 'parsed post'. previously this was a big mess of tuples upon tuples and 'all parse results' vs 'whole page parse results' semantic sludge</li>
+                        <li>refactored `ClientParsing` to a new `parsing` module, added `ClientParsingResults` to handle the new objects, and split off old file lookup stuff to `ClientParsingLegacy`</li>
+                        <li>all parsers now use the new objects to report what content they can parse</li>
+                        <li>all parsers now use the new objects all along the parsing pipeline! the whole thing is done and much nicer</li>
+                        <li>deleted a ton of old bad code that was navigating this before</li>
+                        <li>deleted some old bytes/str error-handling back from the python 2 days</li>
+                        <li>when a gallery url is worked, it now reports fully, in the gallery log note column, how many sub-gallery urls were parsed, and how many were previously hit this run, and how many next gallery page urls were parsed, and how many were previously hit this run, and whether a url class extrapolated next gallery page url was generated, and, the same deal, if it was previously hit this run. previously, this guy mostly just reported the latest interesting thing to happen--now it is comprehensive</li>
+                        <li>fixed an odd bug where the gallery worker could add a sub-gallery urls that pointed to the API redirected URL that created it</li>
+                        <li>fixed an odd bug where the gallery worker could skip the 'seen this url before in this parsing run?' check for an auto-generated 'next page' gallery url fallback step</li>
+                        <li>cleaned up the gallery url 'work' code significantly</li>
+                        <li>fixed a note parsing issue in the downloader where note texts were not always being cleaned on parse</li>
+                        <li>overhauled the subsidiary parser test panel to use the actual code as-in the subsidiary parser, rather than a facsimile</li>
+                        <li>got the page parser and subsidiary page parser test panels to recognise empty input rather than outputting errors on failed conversions of the empty string lol</li>
+                        <li>all the 'raw data'/'post conversion'/'post separation' tabs in the parser test UI now show up to 64KB of data. previously, the latter two were still capped to 1KBs</li>
+                        <li>fixed some bad layout in the edit subsidiary page parser panel</li>
+                        <li>cleaned up some lazy variable names in the subsidiary page parser code</li>
+                        <li>cleaned up how subsidiary page parsers initialise their edit panel</li>
+                        <li>fixed a layout issue in the 'edit login step' panel where there were now two nested 'content parsers' static boxes</li>
+                        <li><h3>some subscription logic and UI</h3></li>
+                        <li>cleaned some of the subscription gallery search logic, especially the 'have we caught up to where we were despite the (large) gallery page not being finished yet?' test, which has a couple of false positive edge cases solved</li>
+                        <li>cleaned some duplicate code out of here</li>
+                        <li>subscription queries now have an editable 'compaction number', which governs how small they should trim themselves to. this was previously fixed at 250 items, but is now changeable for advanced debugging purposes under the edit subscription query panel</li>
+                        <li>if you have a very large periodic file limit or the site produces a huge gallery page, the compaction number will now increase dynamically to ensure the subscription maintains a healthy cache of urls to consult for the size of our job</li>
+                        <li>the edit subscription query panel gets a layout overhaul. the stack of widgets is now grouped into boxes</li>
+                        <li>the `options-&gt;downloading` page now specifies that the two checker options buttons are for the subscription/watcher _defaults_</li>
+                        <li>as a side thing, watcher check logs now record up to 500 entries before removing old items. used to be 100</li>
+                        <li><h3>weird thing</h3></li>
+                        <li>the tag autocomplete searches across the program that manage a `read/search` context (as opposed to a `write/edit` one), will now pass a keyboard copy event to their top list if there is no selected text in the text input and there are no results in the search list below. actually getting into this situation is tricky, but this is really prep for a future overhaul of the write context, where no results is the default situation on an empty input but which cannot actually talk to its top list yet</li>
+                    </ul>
+                </li>
+                <li>
+                    <h2 id="version_609"><a href="#version_609">version 609</a></h2>
+                    <ul>
+                        <li><h3>macOS app now comes in a zip</h3></li>
+                        <li>the macos-13 runner that we recently moved to has been taking way too long to build the App DMG. under ideal conditions it will take ~6 minutes, but sometimes it will be 45+. this is an unfortunate and widespread issue without an excellent fix</li>
+                        <li>thus, the macOS App is now distributed in a zip (that takes about 30 seconds to build and is the same size as the DMG lol)</li>
+                        <li>unfortunately this means we can't have the Applications shortcut or the ReadMe; you'll be double-clicking the zip to extract the App, and then dragging it to your Applications yourself</li>
+                        <li>I have updated the 'getting started - installing' guide with the 'allow unsigned apps' stuff from the ReadMe</li>
+                        <li>I am increasingly of the mind that macOS users should consider running from source. the App is built for intel chipsets, so if you are on Silicon, you definitely should: https://hydrusnetwork.github.io/hydrus/running_from_source.html</li>
+                        <li><h3>misc</h3></li>
+                        <li>INFO: reducing the 'too many events' mpv error-handling hook worked well. if you saw a bunch of these in the past few weeks, these were almost certainly false-positives. the files were likely not broken, they were just taxing your computer for a bit and the error was firing accidentally. if you set up a special workflow to isolate or deal with these files, please undo it</li>
+                        <li>the new 'group by namespace (user)' list widget under `options-&gt;sort/collect` now accepts `:` to represent 'all other namespaced tags' if you would like to put them somewhere specific</li>
+                        <li>fixed a typo in the new duplicate files 'has duration' comparison strings. it said 'the other has duration, the other does not' when the current file had no duration</li>
+                        <li>the score for duration now scales from 1 to 50 depending on how much longer a vid is than the other on millisecond longer = 1, twice as long = 50 (cap). this is all still just hardcoded stuff I'm playing around with, and I expect it to formalise to something completely user-customisable as the tools from duplicates auto-resolution firm up</li>
+                        <li>added a little section to 'help my db is broke.txt' talking about the sqlite3 terminal and how to get it on non-Windows</li>
+                        <li><h3>colour sorting</h3></li>
+                        <li>after talking with some users, and learning that our blurhash provides the average colour of image thumbnails, I went bananas and added five new 'average colour' file sorts--</li>
+                        <li>`lightness` - sorts light-to-dark in the Lab colourspace</li>
+                        <li>`hue` - sorts the standard red-orange-yellow-green-cyan-blue-purple colourwheel/rainbow in the HSL colourspace</li>
+                        <li>`balance - blue-yellow` - sorts blue-yellow chromaticity in the Lab colourspace</li>
+                        <li>`balance - green-red` - sorts green-red chromaticity in the Lab colourspace</li>
+                        <li>`chromatic magnitude` - sorts the combined chroma value, which is basically 'is it grey or colourful' in the Lab colourspace</li>
+                        <li>this works on any file with a thumbnail!</li>
+                        <li>they all work with system:limit, also!</li>
+                        <li>and the Client API--new `file_sort_type` definitions are in the Client API reference</li>
+                        <li>I am extremely pleased with how this all worked out. there are some weird results because it is average colour, rather, say, than a carefully selected 'primary colour', and I think it could do with some more work, to perhaps, for instance, push remarkably grey images to the bottom of Hue sorts, but this really works and it simply looks cool to do and then scroll through. it is a good base and proof of concept for my original plan to make colour histograms for files and distinguish between images that are muddy all over versus white and red. let me know where this succeeds and fails, and we'll see what improvements we can think of</li>
+                        <li><h3>janitor stuff</h3></li>
+                        <li>in the petition processing page, when you process a petition, either the normal way or via the mass approve/deny buttons, the 'currently highlighted petition' moves to _after_ the current one (or the next available one if you process multiple at once). previously this was resetting to the 0 position on every mass approve/deny. it should ripple down a bit more naturally now</li>
+                        <li>when you set to apply multiple petitions at once, the pertinent list rows now instantly to show 'uploading...' status</li>
+                        <li>I wrote a whack of test code that loads up and processes fake petitions for the petition page, so I can test these workflows much easier now</li>
+                        <li>I fixed the 'modify account that uploaded this tag' for tags that include the '+' character. sorry for the long-time trouble--it was a stupid GET args parsing issue I missed in early code</li>
+                        <li><h3>boring code cleanup</h3></li>
+                        <li>broke up the 'ManagementPanels' monolith, refactoring it to a bunch of smaller files more under the 'Sidebar' name</li>
+                        <li>renamed the ambiguous 'management type' to 'page type', and 'management panel' to 'sidebar', and 'management controller' to 'page manager' across the program</li>
+                        <li>cleaned up some old static superclass calls in here to `super()`</li>
+                        <li>brushed up the code generally around here, ditching some bad ideas and scope design</li>
+                        <li>fixed a small instability trigger in the main file query routine</li>
+                        <li>cleaned up some more inartful controller scope code in page and downloader UI</li>
+                        <li>cleaned some ugly `QLineEdit` initialisations across the program</li>
+                        <li>updated the server requirements.txt, which isn't used for anything but a reference, to use the newer OpenCV; I just forgot to update it a while ago</li>
+                        <li><h3>pyproject.toml</h3></li>
+                        <li>a user made a 'pyproject.toml' file. this is basically a cleverer requirements.txt that allows for better dependency options. I learned a bit about these files this week and I quite like them. pip can handle them too, so this would be one way to simplify my setup_venv scripts to a single call and allow users to set up simple custom automated situations</li>
+                        <li>so, just for now, there's a pyproject.toml in the base directory. if you use `uv`, feel free to play around with it. I will manually keep it updated and version-synced to our requirements txts, and I wouldn't be surprised if I switch to it as the master soon. I'm going to do some other work and research and testing first though</li>
+                        <li><h3>duplicates auto-resolution</h3></li>
+                        <li>I did a little work on the daemon, but I didn't feel great about it tbh. I know roughly the various things it needs to do, but I'm not firm on what should be the correct orientation of everything. I'll keep at it, and I may do more UI so I have better feedback while I am doing final integration here</li>
+                    </ul>
+                </li>
+                <li>
+                    <h2 id="version_608"><a href="#version_608">version 608</a></h2>
+                    <ul>
+                        <li><h3>mpv</h3></li>
+                        <li>my ill-fated mpv-choking error hook, which tries to catch when MPV is having a 100% CPU event and unloads the file in a big fuss, and which has unfortunately caused a whole bunch of false positives, is now flipped on its head. instead of catching all instances of the log output and trying to exclude 'oh that's fine' cases, the hook now precisely targets files that go irrevocably 100% CPU on loop, specifically by recognising files that reload too frequently in one second for their duration (e.g. a normal vid looping twenty times in one second). mpv will be back to being juddery sometimes, but whatever, that's better than what I was doing</li>
+                        <li>the new 'DEBUG CAREFUL: Allow "too many events queued" files' checkbox no longer does anything and is removed</li>
+                        <li>also, the mpv emergency dump-out code is back to being per mpv player. previously it would unload all players the client was managing</li>
+                        <li>my mpv player now uses a little less CPU when mouse-drag-seeking</li>
+                        <li><h3>misc</h3></li>
+                        <li>I am changing the tag sort logic such that if you group by namespace, the namespace order stays as it is, no matter the underling asc/desc order of the actual sort. in simple english, this means that creator tags stay at the top whether you say 'most first' or 'fewest first'. we had success with the 'namespace (user)' just recently, and after talking about it with some guys, I think I agree that doing a full reverse of the whole list is not useful, and it isn't, fundamentally, what grouping is. let's try it like this, see how we like it</li>
+                        <li>the various multi-column lists across the program, which generally set their minimum and initial height by a 'num rows' suggestion, now do so pixel-perfect in most cases, no matter the style (it was previously ok on windowsvista, with a bit of fuzzy padding, but on Fusion it was either too tall or short due to font height estimate stuff). the downloader and watcher lists, which dynamically size according to contents, also do so unerringly. I find this very slightly eerie tbh so I might add a couple pixels of whitespace on the end so your brain knows there isn't more to scroll. let's try it like this for a few weeks and see how it feels</li>
+                        <li>added `--pause_network_traffic` launch parameter to the client, which hits `network-&gt;pause-&gt;all new network traffic` before the network engine initialises, to help debug when pending subscriptions or initial-session downloaders go crazy</li>
+                        <li>in 'manage tag siblings/parents', if you import from a clipboard/txt that includes a `a-&gt;a` loop-pair, the dialog now yells at you</li>
+                        <li>as a little hack, I added ctrl+shift+c to the taglist to say 'copy tags with parents' the default ctrl+c does not include the parents</li>
+                        <li>removed a duplicate and blank entry for 'EXPERIMENTAL: Image path for thumbnail panel...' in `options-&gt;thumbnails`, whoops</li>
+                        <li>I added a little safety code to the import folder, trying to catch a possible infinite loop we have seen. import folders now also take regular short breaks to give other threads like garbage collection a guaranteed moment to step in</li>
+                        <li>fixed a bad buffer truncation calculation in the native video viewer</li>
+                        <li><h3>build/jpeg-xl stuff</h3></li>
+                        <li>in `help-&gt;about`, moved the Jpeg-XL and HEIF(/AVIF) support lines to the second tab, and together</li>
+                        <li>if your client does not have Jpeg-XL support, the import error is now stated when you hit `help-&gt;about`. **if you are on macOS, you probably do not have Jpeg-XL support yet**, and the solution, whether on App or from source, is to run `brew install jpeg-xl` in the terminal, which is now also said in this message (issue #1670)</li>
+                        <li>added a small note to the installing help docs to say Apple Silicon users should consider running from source. the App is Intel for the time being, and running from source will give you a much more pleasant experience all around</li>
+                        <li><h3>boring code cleanup</h3></li>
+                        <li>refactored the `ProcessContentUpdates` megacall and its friends to a new 'content updates' database module</li>
+                        <li>refactored the duplicates file search stuff down to a new database module</li>
+                        <li>and refactored the 'set duplicates' call down to a new database module</li>
+                        <li>about 110KB of code is thus cleared out of the `ClientDB` monolith, which is down to 500KB, and we are ready to plug the duplicates auto-resolution module in as it now has scope on the various calls it needs</li>
+                        <li>fleshed out the duplicates db module's master id definitions</li>
+                        <li>cleaned up how I refer to file duration across the program. all the convenient-to-change duration or frame durations have a unified nomenclature and always say if they are in seconds or milliseconds</li>
+                        <li><h3>duplicates auto-resolution</h3></li>
+                        <li>the final difficult duplicates auto-resolution database problem (fast incremental duplicate pairs search) is solved. outside of at-scale testing and final integration, the database side of this is now complete. now just need to to figure out a daemon and a preview panel</li>
+                    </ul>
+                </li>
+                <li>
+                    <h2 id="version_607"><a href="#version_607">version 607</a></h2>
+                    <ul>
+                        <li><h3>misc</h3></li>
+                        <li>jpeg-xl images are now fully supported! jpeg-xl is one of the contenders for 'what format do we use next?', and I think a pretty good one. it is basically jpeg but it can handle more colour depth/HDR, transparency, and optional lossless encoding, all while saving about 40% equivalent filesize to a jpeg/png. I understand it can also do animation (although we don't add that today), making it a potential 'capabilities superset' of gif as well. jpeg-xl is not well supported yet, but I hope that as more programs add support we'll see that change, and hydrus does its part today. thanks to the users who navigated this</li>
+                        <li>added some boxes to `options-&gt;thumbnails` to give it some better layout and grouping</li>
+                        <li>the 'show the media viewer top hover text in the status bar when one thumb is selected' option now defaults to True. it was a mistake to turn this off by default, and all users will be switched to True on update. the checkbox remains in `options-&gt;thumbnails` if you want to turn it off</li>
+                        <li>added 'Give thumbnail ratings a flat background' to `options-&gt;thumbnails` to turn off if you prefer to just have the ratings without the rectangle backing I added last week</li>
+                        <li>the new 'namespace grouping sort' sorted text list in `options-&gt;sort/collect` now has a paste button if you need to enter a ton of them</li>
+                        <li>a new checkbox under `options-&gt;importing` let's you stop the program switching to the destination download page whenever you drag and drop a URL on the program. this was personally driving me nuts</li>
+                        <li>when you right-click a selection of predicates that includes OR preds, the 'copy' submenu now includes an option to copy texts with collapse ORs, which renders them like "a OR b OR c" in one line, rather than the separate rows</li>
+                        <li>the duplicate filter's "comparison statements" in the mid-right hover now show if one or both files have duration. I hacked this in simply for guys who are using external tools to get videos into the potential duplicate pairs queue, and I still want to completely rewrite this thing to a fully user-editable system once I have the tools matured in the duplicates auto-resolution work</li>
+                        <li>a safety limit that would force the status bar to stick to 'x files' instead of the more interesting and cpu-intensive 'x images/collections/whatever' is raised from 1,000 files to 100,000. let's see how it goes</li>
+                        <li>fixed a sometimes-error when showing different file presentations of watchers/gallery downloaders (when you right-click some and say `show files-&gt;blah`)</li>
+                        <li>the complicated pre-download file status logic that determines if a URL-mapping has untrustworthy neighbours now prints a little log message of what it discovered when it hits a positive. this thing runs a little quiet and I want to see if it is firing too often or is not quite checking what we want in difficult cases</li>
+                        <li>fixed a weird typo when unsetting the EXPERIMENTAL media viewer background bitmap thing in `options-&gt;thumbnails`</li>
+                        <li><h3>MPV</h3></li>
+                        <li>I did some work trying to handle the 'too many events queued' problems we've seen with mpv recently. I cleaned some code and reduced the overhead of my custom event handling, but I am generally convinced that some of the problems we've seen are due to 100% CPU bugs in various libmpv versions, particularly because I can set the 'loglevel' of mpv to 'no', for 'nothing at all', but the error still happens, suggesting there is probably no log-processing speed I can do on my end to fix this. I am leaving the emergency-dump-out code in place, but for this specific 'too many events queued' error it no longer adds that file to the 'never load again this boot' list--you can deselect the file and then reselect to try again (although it seems like the mpv player's event loop can be poisoned by the situation and lags a bit on next load). I have also seen the error occur at I believe the start of playback, but then I could load the file fine another time with the same dll, which suggests the log stuff can pile up due to a brief busy period in thread scheduling or whatever. so, there is more to do here--perhaps a 'if we get the error persisting for more than two seconds' or something</li>
+                        <li>I did discover a different loop flag I could set for mpv that fixes one of the reliable problems--setting 'loop-playlist' rather than 'loop-file', which seems to force the file to reload and avoids the EOF rewind bug that mpv is running into. if you get the error on the first loop of a file, try hitting the new checkbox under `options-&gt;media playback` and we'll see how it all goes</li>
+                        <li>I also just bit the bullet and added a DEBUG option, also to `options-&gt;media playback`, to disable the new 'too many events queued' dump-out hook. if you hit many false-positives and are feeling brave, try turning it off, but you may have to deal with some 100% CPU situations</li>
+                        <li><h3>viewtimes are now in ms</h3></li>
+                        <li>the filetime viewing stats system now records total viewtime in ms (previously it only had 'second' resolution). this doesn't matter all that much, but all the little deltas it adds are now 'viewed file for 3.2 seconds' rather than always rounding to the nearest integer</li>
+                        <li>the settings under `options-&gt;file viewing statistics` are now full 'time delta' widgets that support ms, so you can say 'viewing a file for at least 2.5 seconds counts as a view' rather, again, than having to deal with full integers all the time</li>
+                        <li>system:viewtime now supports milliseconds input for viewtime ranges</li>
+                        <li>mr bones now reports a ms-precise (float) total viewtime (e.g. 3.456s) for the current search</li>
+                        <li><h3>client api</h3></li>
+                        <li>the client api can now see and edit file viewtime statistics!</li>
+                        <li>`/get_files/file_metadata` now states the file viewtime statistics (last viewed time, total views, total viewtime for the different viewer types) for each file</li>
+                        <li>file viewtime statistics has a new 'client api viewer' enum, separate from the existing 'media viewer' and 'preview viewer' record, if you'd like to do your own thing. I've hacked this a bit, and it doesn't show in the normal Client UI yet, nor can you search on it via `system:file viewing statistics`. the current options on how to show viewtime (`options-&gt;file viewing statistics`) are frankly crazy, so I think probably we'll want to go to a list of simpler checkboxes or something and stop trying to be clever</li>
+                        <li>the new `/edit_times/increment_file_viewtime`, which needs the existing 'edit times' permission, lets you add views and viewtime and set the latest view timestamp</li>
+                        <li>the new `/edit_times/set_file_viewtime`, which needs the existing 'edit times' permission, lets you set fixed values (i.e. if you are migrating from one client to another)</li>
+                        <li>I have not added a delete/clear call here yet. if you would like to do this, let me know what you would like. the client only has 'clear everything for this file' and 'clear all records completely', but I expect we'd want the ability to clear by view type?</li>
+                        <li>wrote help for this</li>
+                        <li>wrote unit tests for this</li>
+                        <li>client api version is now 78</li>
+                        <li>the rich version of `/get_files/file_metadata` is now providing a lot of personal user metadata like inbox, ratings, local tags, and now viewtime statistics, making the 'just share some files with a friend' scenario less attractive. I was considering adding a new 'edit file viewtimes' permission today that would allow the edit and also dynamically show/hide the new viewtimes, but I think it would be better if I make a _read_ permission in the _ouvre_ of 'can see user file metadata', which, if absent, will mean callers can only ask for the basic file information. this permission may apply in other places, and the whole client api permissions system could do with a pass and likely some KISS. let me know what you think!</li>
+                        <li><h3>boring cleanup</h3></li>
+                        <li>cleaned up how some thumbnail-focus-delegation happens on new file focuses</li>
+                        <li>cleaned some viewtime pipeline code generally</li>
+                        <li>fixed the API help json example requests for `set_time`, which didn't have `file_id` stuff</li>
+                        <li>replaced all my 'convert ms time to s time, but a float, oh except I guess when it is null, don't forget bro' code with a single and safer unified call across the program</li>
+                        <li>cleaned up some agnostic 's or ms' duration calls, but there's plenty more to do</li>
+                        <li><h3>build updates</h3></li>
+                        <li>last week's 'future build' went well, so I am folding the changes into the normal build. users who run from source may like to run their `setup_venv` script again today, and users who would like to run from source but only have python 3.13 now have a route to run hydrus</li>
+                        <li>details--</li>
+                        <li>PySide6 (Qt) is updated from `6.6.3.1` to `6.7.3` (test version is now `6.8.1.1`, which source users on Python 3.13 can run)</li>
+                        <li>on macOS, PyQt6 (Qt) is updated from `6.6.0` to `6.7.1`</li>
+                        <li>OpenCV (image stuff) is updated from `4.8.1.78` to `4.10.0.84`, which lets us update numpy (test version is now `4.11.0.86`)</li>
+                        <li>numpy is switched from `&lt;2.0.0` to `&gt;=2.0.0`. this adds Python 3.13 support to hydrus for source users</li>
+                        <li>pillow-jxl-plugin is added, and thereby we have Jpeg-XL support (thanks to some users for navigating this!)</li>
+                        <li>the python mpv package is updated from `1.0.6` to `1.0.7` (test verison stays at `1.0.7`; there is nothing new)</li>
+                        <li>twisted (the networking engine that runs the hydrus server and client api) now includes better TLS and http2 support</li>
+                        <li>some import hacks that helped old PyInstaller navigate numpy and OpenCV bundling are removed</li>
+                    </ul>
+                </li>
+                <li>
                     <h2 id="version_606"><a href="#version_606">version 606</a></h2>
                     <ul>
                         <li><h3>tag sort</h3></li>

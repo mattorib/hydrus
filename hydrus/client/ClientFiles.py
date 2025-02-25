@@ -627,7 +627,7 @@ class ClientFilesManager( object ):
         hash = media.GetHash()
         mime = media.GetMime()
         ( width, height ) = media.GetResolution()
-        duration = media.GetDurationMS()
+        duration_ms = media.GetDurationMS()
         num_frames = media.GetNumFrames()
         
         bounding_dimensions = self._controller.options[ 'thumbnail_dimensions' ]
@@ -640,7 +640,7 @@ class ClientFilesManager( object ):
         
         try:
             
-            thumbnail_bytes = HydrusFileHandling.GenerateThumbnailBytes( file_path, target_resolution, mime, duration, num_frames, percentage_in = percentage_in )
+            thumbnail_bytes = HydrusFileHandling.GenerateThumbnailBytes( file_path, target_resolution, mime, duration_ms, num_frames, percentage_in = percentage_in )
             
         except Exception as e:
             
@@ -1557,7 +1557,7 @@ class ClientFilesManager( object ):
     
     def DoDeferredPhysicalDeletes( self ):
         
-        wait_period = self._controller.new_options.GetInteger( 'ms_to_wait_between_physical_file_deletes' ) / 1000
+        wait_period = HydrusTime.SecondiseMSFloat( self._controller.new_options.GetInteger( 'ms_to_wait_between_physical_file_deletes' ) )
         
         num_files_deleted = 0
         num_thumbnails_deleted = 0
@@ -1937,7 +1937,7 @@ class ClientFilesManager( object ):
                     existing_modified_time = os.path.getmtime( path )
                     
                     # floats are ok here!
-                    modified_timestamp = modified_timestamp_ms / 1000
+                    modified_timestamp = HydrusTime.SecondiseMSFloat( modified_timestamp_ms )
                     
                     try:
                         
@@ -1988,7 +1988,7 @@ def HasHumanReadableEmbeddedMetadata( path, mime, human_file_description = None 
     return has_human_readable_embedded_metadata
     
 
-def HasTransparency( path, mime, duration = None, num_frames = None, resolution = None ):
+def HasTransparency( path, mime, duration_ms = None, num_frames = None, resolution = None ):
     
     if mime not in HC.MIMES_THAT_WE_CAN_CHECK_FOR_TRANSPARENCY:
         
@@ -2018,7 +2018,7 @@ def HasTransparency( path, mime, duration = None, num_frames = None, resolution 
                 
             else:
                 
-                renderer = HydrusVideoHandling.VideoRendererFFMPEG( path, mime, duration, num_frames, resolution )
+                renderer = HydrusVideoHandling.VideoRendererFFMPEG( path, mime, duration_ms, num_frames, resolution )
                 
             
             for i in range( num_frames ):
@@ -2558,7 +2558,7 @@ class FilesMaintenanceManager( ClientDaemons.ManagerWithMainLoop ):
             
             path = self._controller.client_files_manager.GetFilePath( hash, mime )
             
-            has_transparency = HasTransparency( path, mime, duration = media_result.GetDurationMS(), num_frames = media_result.GetNumFrames(), resolution = media_result.GetResolution() )
+            has_transparency = HasTransparency( path, mime, duration_ms = media_result.GetDurationMS(), num_frames = media_result.GetNumFrames(), resolution = media_result.GetResolution() )
             
             additional_data = has_transparency
             
@@ -2579,9 +2579,9 @@ class FilesMaintenanceManager( ClientDaemons.ManagerWithMainLoop ):
             
             path = self._controller.client_files_manager.GetFilePath( hash, original_mime )
             
-            ( size, mime, width, height, duration, num_frames, has_audio, num_words ) = HydrusFileHandling.GetFileInfo( path, ok_to_look_for_hydrus_updates = True )
+            ( size, mime, width, height, duration_ms, num_frames, has_audio, num_words ) = HydrusFileHandling.GetFileInfo( path, ok_to_look_for_hydrus_updates = True )
             
-            additional_data = ( size, mime, width, height, duration, num_frames, has_audio, num_words )
+            additional_data = ( size, mime, width, height, duration_ms, num_frames, has_audio, num_words )
             
             if mime != original_mime and not media_result.GetFileInfoManager().FiletypeIsForced():
                 
@@ -2714,9 +2714,9 @@ class FilesMaintenanceManager( ClientDaemons.ManagerWithMainLoop ):
             return None
             
         
-        duration = media_result.GetDurationMS()
+        duration_ms = media_result.GetDurationMS()
         
-        if duration is not None:
+        if duration_ms is not None:
             
             return None
             
@@ -2743,6 +2743,7 @@ class FilesMaintenanceManager( ClientDaemons.ManagerWithMainLoop ):
             return None
             
         
+    
     def _RegenBlurhash( self, media ):
         
         if media.GetMime() not in HC.MIMES_WITH_THUMBNAILS:

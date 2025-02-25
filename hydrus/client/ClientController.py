@@ -1240,7 +1240,7 @@ class Controller( HydrusController.HydrusController ):
             ClientEnvironment.SetRequestsCABundleEnv()
             
         
-        if self.new_options.GetBoolean( 'boot_with_network_traffic_paused' ):
+        if self.new_options.GetBoolean( 'boot_with_network_traffic_paused' ) or HG.boot_with_network_traffic_paused_command_line:
             
             CG.client_controller.new_options.SetBoolean( 'pause_all_new_network_traffic', True )
             
@@ -1632,7 +1632,7 @@ class Controller( HydrusController.HydrusController ):
                 
                 work_time_ms = CG.client_controller.new_options.GetInteger( 'potential_duplicates_search_work_time_ms' )
                 
-                work_time = work_time_ms / 1000
+                work_time = HydrusTime.SecondiseMSFloat( work_time_ms )
                 
                 ( still_work_to_do, num_done ) = CG.client_controller.WriteSynchronous( 'maintain_similar_files_search_for_potential_duplicates', search_distance, maintenance_mode = maintenance_mode, work_time_float = work_time )
                 

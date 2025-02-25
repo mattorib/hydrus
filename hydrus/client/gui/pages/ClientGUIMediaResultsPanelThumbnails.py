@@ -27,7 +27,7 @@ from hydrus.client.gui import QtPorting as QP
 from hydrus.client.gui.media import ClientGUIMediaSimpleActions
 from hydrus.client.gui.media import ClientGUIMediaModalActions
 from hydrus.client.gui.media import ClientGUIMediaMenus
-from hydrus.client.gui.pages import ClientGUIManagementController
+from hydrus.client.gui.pages import ClientGUIPageManager
 from hydrus.client.gui.pages import ClientGUIMediaResultsPanel
 from hydrus.client.gui.pages import ClientGUIMediaResultsPanelMenus
 from hydrus.client.media import ClientMedia
@@ -125,7 +125,7 @@ class ThumbnailWaitingToBeDrawnAnimated( ThumbnailWaitingToBeDrawn ):
 
 class MediaResultsPanelThumbnails( ClientGUIMediaResultsPanel.MediaResultsPanel ):
     
-    def __init__( self, parent, page_key, management_controller: ClientGUIManagementController.ManagementController, media_results ):
+    def __init__( self, parent, page_key, page_manager: ClientGUIPageManager.PageManager, media_results ):
         
         self._clean_canvas_pages = {}
         self._dirty_canvas_pages = []
@@ -141,7 +141,7 @@ class MediaResultsPanelThumbnails( ClientGUIMediaResultsPanel.MediaResultsPanel 
         self._hashes_to_thumbnails_waiting_to_be_drawn: typing.Dict[ bytes, ThumbnailWaitingToBeDrawn ] = {}
         self._hashes_faded = set()
         
-        super().__init__( parent, page_key, management_controller, media_results )
+        super().__init__( parent, page_key, page_manager, media_results )
         
         self._last_device_pixel_ratio = self.devicePixelRatio()
         
@@ -2431,6 +2431,8 @@ class Thumbnail( Selectable ):
         
         # ratings
         
+        draw_thumbnail_rating_background = CG.client_controller.new_options.GetBoolean( 'draw_thumbnail_rating_background' )
+        
         current_top_right_y = thumbnail_border
         
         services_manager = CG.client_controller.services_manager
@@ -2449,7 +2451,10 @@ class Thumbnail( Selectable ):
             rect_x = width - thumbnail_border - rect_width
             rect_y = current_top_right_y
             
-            painter.fillRect( rect_x, rect_y, rect_width, rect_height, qss_window_colour )
+            if draw_thumbnail_rating_background:
+                
+                painter.fillRect( rect_x, rect_y, rect_width, rect_height, qss_window_colour )
+                
             
             like_rating_current_x = rect_x + ICON_MARGIN
             like_rating_current_y = rect_y + ICON_MARGIN
@@ -2486,7 +2491,10 @@ class Thumbnail( Selectable ):
             rect_x = width - thumbnail_border - rect_width
             rect_y = current_top_right_y
             
-            painter.fillRect( rect_x, rect_y, rect_width, rect_height, qss_window_colour )
+            if draw_thumbnail_rating_background:
+                
+                painter.fillRect( rect_x, rect_y, rect_width, rect_height, qss_window_colour )
+                
             
             numerical_rating_current_x = rect_x + ICON_MARGIN
             numerical_rating_current_y = rect_y + ICON_MARGIN
@@ -2513,7 +2521,10 @@ class Thumbnail( Selectable ):
             rect_x = width - thumbnail_border - rect_width
             rect_y = current_top_right_y
             
-            painter.fillRect( rect_x, rect_y, rect_width, rect_height, qss_window_colour )
+            if draw_thumbnail_rating_background:
+                
+                painter.fillRect( rect_x, rect_y, rect_width, rect_height, qss_window_colour )
+                
             
             incdec_rating_current_x = rect_x + ICON_MARGIN
             incdec_rating_current_y = rect_y + ICON_MARGIN
