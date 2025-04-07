@@ -1,10 +1,13 @@
 import collections
+import itertools
 import sqlite3
 import typing
 
 from hydrus.core import HydrusConstants as HC
 from hydrus.core import HydrusData
 
+from hydrus.client import ClientGlobals as CG
+from hydrus.client import ClientTime
 from hydrus.client.db import ClientDBDefinitionsCache
 from hydrus.client.db import ClientDBFilesInbox
 from hydrus.client.db import ClientDBFilesMetadataBasic
@@ -89,6 +92,53 @@ class ClientDBMediaResults( ClientDBModule.ClientDBModule ):
             
         
         return hashes_that_need_refresh
+        
+    
+    def ForceRefreshFileInfoManagers( self, hash_ids_to_hashes: dict ):
+        
+        hash_ids = list( hash_ids_to_hashes.keys() )
+        
+        ( cached_media_results, missing_hash_ids ) = self._weakref_media_result_cache.GetMediaResultsAndMissing( hash_ids )
+        
+        cached_hash_ids_to_media_results = { media_result.GetHashId() : media_result for media_result in cached_media_results }
+        
+        cached_hash_ids = list( cached_hash_ids_to_media_results.keys() )
+        
+        with self._MakeTemporaryIntegerTable( cached_hash_ids, 'hash_id' ) as temp_table_name:
+            
+            self._AnalyzeTempTable( temp_table_name )
+            
+            file_info_managers = self.GenerateFileInfoManagers( cached_hash_ids, temp_table_name )
+            
+        
+        for file_info_manager in file_info_managers:
+            
+            cached_hash_ids_to_media_results[ file_info_manager.hash_id ].SetFileInfoManager( file_info_manager )
+            
+        
+        updated_hashes = [ media_result.GetHash() for media_result in cached_hash_ids_to_media_results.values() ]
+        
+        CG.client_controller.pub( 'notify_files_need_redraw', updated_hashes )
+        
+    
+    def ForceRefreshFileModifiedTimestamps( self, hash_ids_to_hashes: dict ):
+        
+        hash_ids = list( hash_ids_to_hashes.keys() )
+        
+        ( cached_media_results, missing_hash_ids ) = self._weakref_media_result_cache.GetMediaResultsAndMissing( hash_ids )
+        
+        cached_hash_ids_to_media_results = { media_result.GetHashId() : media_result for media_result in cached_media_results }
+        
+        for media_result in cached_hash_ids_to_media_results.values():
+            
+            result = self.modules_files_timestamps.GetTimestampMS( media_result.GetHashId(), ClientTime.TimestampData.STATICSimpleStub( HC.TIMESTAMP_TYPE_MODIFIED_FILE ) )
+            
+            media_result.GetTimesManager().SetFileModifiedTimestampMS( result )
+            
+        
+        updated_hashes = [ media_result.GetHash() for media_result in cached_hash_ids_to_media_results.values() ]
+        
+        CG.client_controller.pub( 'notify_files_need_redraw', updated_hashes )
         
     
     def GenerateFileInfoManagers( self, hash_ids: typing.Collection[ int ], hash_ids_table_name ) -> typing.List[ ClientMediaManagers.FileInfoManager ]:
@@ -492,6 +542,23 @@ class ClientDBMediaResults( ClientDBModule.ClientDBModule ):
             
         
         return media_results
+        
+    
+    def GetMediaResultPairs( self, pairs_of_hash_ids ):
+        
+        all_hash_ids = set( itertools.chain.from_iterable( pairs_of_hash_ids ) )
+        
+        media_results = self.GetMediaResults( all_hash_ids )
+        
+        hash_ids_to_media_results = { media_result.GetHashId() : media_result for media_result in media_results }
+        
+        media_result_pairs = [
+            ( hash_ids_to_media_results[ hash_id_a ], hash_ids_to_media_results[ hash_id_b ] )
+            for ( hash_id_a, hash_id_b )
+            in pairs_of_hash_ids
+        ]
+        
+        return media_result_pairs
         
     
     def GetMediaResultFromHash( self, hash ) -> ClientMediaResult.MediaResult:

@@ -76,6 +76,7 @@ SHORTCUT_KEY_SPECIAL_MEDIA_NEXT = 31
 SHORTCUT_KEY_SPECIAL_MEDIA_VOLUME_DOWN = 32
 SHORTCUT_KEY_SPECIAL_MEDIA_VOLUME_UP = 33
 SHORTCUT_KEY_SPECIAL_MEDIA_VOLUME_MUTE_UNMUTE = 32
+SHORTCUT_KEY_SPECIAL_EMPTY_MODIFIER = 33
 
 if HC.PLATFORM_MACOS:
     
@@ -125,7 +126,11 @@ special_key_shortcut_enum_lookup = {
     QC.Qt.Key.Key_MediaNext : SHORTCUT_KEY_SPECIAL_MEDIA_NEXT,
     QC.Qt.Key.Key_VolumeDown : SHORTCUT_KEY_SPECIAL_MEDIA_VOLUME_DOWN,
     QC.Qt.Key.Key_VolumeUp : SHORTCUT_KEY_SPECIAL_MEDIA_VOLUME_UP,
-    QC.Qt.Key.Key_VolumeMute : SHORTCUT_KEY_SPECIAL_MEDIA_VOLUME_MUTE_UNMUTE
+    QC.Qt.Key.Key_VolumeMute : SHORTCUT_KEY_SPECIAL_MEDIA_VOLUME_MUTE_UNMUTE,
+    QC.Qt.Key.Key_Control : SHORTCUT_KEY_SPECIAL_EMPTY_MODIFIER,
+    QC.Qt.Key.Key_Shift : SHORTCUT_KEY_SPECIAL_EMPTY_MODIFIER,
+    QC.Qt.Key.Key_Alt : SHORTCUT_KEY_SPECIAL_EMPTY_MODIFIER,
+    QC.Qt.Key.Key_Meta : SHORTCUT_KEY_SPECIAL_EMPTY_MODIFIER
 }
 
 special_key_shortcut_str_lookup = {
@@ -163,7 +168,8 @@ special_key_shortcut_str_lookup = {
     SHORTCUT_KEY_SPECIAL_MEDIA_NEXT : 'media: next',
     SHORTCUT_KEY_SPECIAL_MEDIA_VOLUME_DOWN : 'volume down',
     SHORTCUT_KEY_SPECIAL_MEDIA_VOLUME_UP : 'volume up',
-    SHORTCUT_KEY_SPECIAL_MEDIA_VOLUME_MUTE_UNMUTE : 'volume mute/unmute'
+    SHORTCUT_KEY_SPECIAL_MEDIA_VOLUME_MUTE_UNMUTE : 'volume mute/unmute',
+    SHORTCUT_KEY_SPECIAL_EMPTY_MODIFIER : 'nothing'
 }
 
 SHORTCUT_MOUSE_LEFT = 0
@@ -333,15 +339,28 @@ SHORTCUTS_MEDIA_VIEWER_ACTIONS = [
     CAC.SIMPLE_ZOOM_IN,
     CAC.SIMPLE_ZOOM_OUT,
     CAC.SIMPLE_SWITCH_BETWEEN_100_PERCENT_AND_CANVAS_ZOOM,
+    CAC.SIMPLE_SWITCH_BETWEEN_100_PERCENT_AND_CANVAS_FIT_AND_FILL_ZOOM,
+    CAC.SIMPLE_SWITCH_BETWEEN_100_PERCENT_AND_CANVAS_FIT_AND_FILL_ZOOM_VIEWER_CENTER,
     CAC.SIMPLE_SWITCH_BETWEEN_100_PERCENT_AND_MAX_ZOOM,
     CAC.SIMPLE_SWITCH_BETWEEN_CANVAS_AND_MAX_ZOOM,
     CAC.SIMPLE_ZOOM_100,
+    CAC.SIMPLE_ZOOM_100_CENTER,
     CAC.SIMPLE_ZOOM_CANVAS,
+    CAC.SIMPLE_ZOOM_CANVAS_VIEWER_CENTER,
     CAC.SIMPLE_ZOOM_DEFAULT,
+    CAC.SIMPLE_ZOOM_DEFAULT_VIEWER_CENTER,
+    CAC.SIMPLE_ZOOM_CANVAS_FILL_X,
+    CAC.SIMPLE_ZOOM_CANVAS_FILL_X_VIEWER_CENTER,
+    CAC.SIMPLE_ZOOM_CANVAS_FILL_Y,
+    CAC.SIMPLE_ZOOM_CANVAS_FILL_Y_VIEWER_CENTER,
+    CAC.SIMPLE_ZOOM_CANVAS_FILL_AUTO,
+    CAC.SIMPLE_ZOOM_CANVAS_FILL_AUTO_VIEWER_CENTER,
     CAC.SIMPLE_ZOOM_MAX,
     CAC.SIMPLE_FLIP_DARKMODE,
     CAC.SIMPLE_CLOSE_MEDIA_VIEWER,
-    CAC.SIMPLE_FLIP_ICC_PROFILE_APPLICATION
+    CAC.SIMPLE_CLOSE_MEDIA_VIEWER_AND_FOCUS_TAB,
+    CAC.SIMPLE_FLIP_ICC_PROFILE_APPLICATION,
+    CAC.SIMPLE_RESET_PAN_TO_CENTER
 ]
 
 SHORTCUTS_MEDIA_VIEWER_BROWSER_ACTIONS = [
@@ -351,7 +370,8 @@ SHORTCUTS_MEDIA_VIEWER_BROWSER_ACTIONS = [
     CAC.SIMPLE_VIEW_PREVIOUS,
     CAC.SIMPLE_PAUSE_PLAY_SLIDESHOW,
     CAC.SIMPLE_SHOW_MENU,
-    CAC.SIMPLE_CLOSE_MEDIA_VIEWER
+    CAC.SIMPLE_CLOSE_MEDIA_VIEWER,
+    CAC.SIMPLE_CLOSE_MEDIA_VIEWER_AND_FOCUS_TAB
 ]
 
 SHORTCUTS_MAIN_GUI_ACTIONS = [
@@ -421,7 +441,8 @@ SHORTCUTS_MEDIA_VIEWER_VIDEO_AUDIO_PLAYER_ACTIONS = [
     CAC.SIMPLE_PAUSE_MEDIA,
     CAC.SIMPLE_PAUSE_PLAY_MEDIA,
     CAC.SIMPLE_MEDIA_SEEK_DELTA,
-    CAC.SIMPLE_CLOSE_MEDIA_VIEWER
+    CAC.SIMPLE_CLOSE_MEDIA_VIEWER,
+    CAC.SIMPLE_CLOSE_MEDIA_VIEWER_AND_FOCUS_TAB
 ]
 
 SHORTCUTS_PREVIEW_VIDEO_AUDIO_PLAYER_ACTIONS = [
@@ -459,6 +480,46 @@ simple_shortcut_name_to_action_lookup = { key : HydrusData.DedupeList( value ) f
 
 CUMULATIVE_MOUSEWARP_MANHATTAN_LENGTH = 0
 
+def AncestorShortcutsHandlers( widget: QW.QWidget ):
+    
+    shortcuts_handlers = []
+    
+    window = widget.window()
+    
+    if window == widget:
+        
+        return shortcuts_handlers
+        
+    
+    widget = widget.parentWidget()
+    
+    if widget is None:
+        
+        return shortcuts_handlers
+        
+    
+    while True:
+        
+        child_shortcuts_handlers = [ child for child in widget.children() if isinstance( child, ShortcutsHandler ) ]
+        
+        shortcuts_handlers.extend( child_shortcuts_handlers )
+        
+        if widget == window:
+            
+            break
+            
+        
+        widget = widget.parentWidget()
+        
+        if widget is None:
+            
+            break
+            
+        
+    
+    return shortcuts_handlers
+    
+
 # ok, the problem here is that I get key codes that are converted, so if someone does shift+1 on a US keyboard, this ends up with Shift+! same with ctrl+alt+ to get accented characters
 # it isn't really a big deal since everything still lines up, but the QGuiApplicationPrivate::platformIntegration()->possibleKeys(e) to get some variant of 'yeah this is just !' seems unavailable for python
 # it is basically a display bug, but it'd be nice to have it working right
@@ -491,6 +552,11 @@ def ConvertQtKeyToShortcutKey( key_qt ):
             return ( SHORTCUT_TYPE_KEYBOARD_CHARACTER, casefold_key_ord )
             
         except:
+            
+            if HG.shortcut_report_mode:
+                
+                HydrusData.ShowText( f'This key ord was not allowed: {key_ord}' )
+                
             
             return ( SHORTCUT_TYPE_NOT_ALLOWED, key_ord )
             
@@ -566,6 +632,7 @@ def ConvertKeyEventToShortcut( event ):
     
     return None
     
+
 def ConvertKeyEventToSimpleTuple( event ):
     
     modifier = QC.Qt.KeyboardModifier.NoModifier
@@ -726,45 +793,7 @@ def ConvertMouseEventToShortcut( event: typing.Union[ QG.QMouseEvent, QG.QWheelE
     
     return None
     
-def AncestorShortcutsHandlers( widget: QW.QWidget ):
-    
-    shortcuts_handlers = []
-    
-    window = widget.window()
-    
-    if window == widget:
-        
-        return shortcuts_handlers
-        
-    
-    widget = widget.parentWidget()
-    
-    if widget is None:
-        
-        return shortcuts_handlers
-        
-    
-    while True:
-        
-        child_shortcuts_handlers = [ child for child in widget.children() if isinstance( child, ShortcutsHandler ) ]
-        
-        shortcuts_handlers.extend( child_shortcuts_handlers )
-        
-        if widget == window:
-            
-            break
-            
-        
-        widget = widget.parentWidget()
-        
-        if widget is None:
-            
-            break
-            
-        
-    
-    return shortcuts_handlers
-    
+
 def IShouldCatchShortcutEvent( event_handler_owner: QC.QObject, event_catcher: QW.QWidget, event: typing.Optional[ QC.QEvent ] = None, child_tlw_classes_who_can_pass_up: typing.Optional[ typing.Collection[ type ] ] = None ):
     
     do_focus_test = True
@@ -828,6 +857,26 @@ def IShouldCatchShortcutEvent( event_handler_owner: QC.QObject, event_catcher: Q
     
     return True
     
+
+def KeyPressEventIsACopy( event: QG.QKeyEvent ):
+    
+    ctrl = event.modifiers() & QC.Qt.KeyboardModifier.ControlModifier
+    
+    key_code = event.key()
+    
+    return ctrl and key_code in ( ord( 'C' ), ord( 'c' ), QC.Qt.Key.Key_Insert )
+    
+
+def KeyPressEventIsAPaste( event: QG.QKeyEvent ):
+    
+    ctrl = event.modifiers() & QC.Qt.KeyboardModifier.ControlModifier
+    shift = event.modifiers() & QC.Qt.KeyboardModifier.ShiftModifier
+    
+    key_code = event.key()
+    
+    return ( ctrl and key_code in ( ord( 'V' ), ord( 'v' ) ) ) or ( shift and key_code == QC.Qt.Key.Key_Insert )
+    
+
 class Shortcut( HydrusSerialisable.SerialisableBase ):
     
     SERIALISABLE_TYPE = HydrusSerialisable.SERIALISABLE_TYPE_SHORTCUT
@@ -1083,31 +1132,73 @@ class Shortcut( HydrusSerialisable.SerialisableBase ):
         
         components = []
         
-        if SHORTCUT_MODIFIER_META in self.modifiers:
-            
-            components.append( 'control' )
-            
+        for_menu = False # I think this ⌘ stuff is only really for short menu labels, which we don't really do anyway, so disabled for now
         
-        if SHORTCUT_MODIFIER_CTRL in self.modifiers:
+        if HC.PLATFORM_MACOS and for_menu: 
             
-            if HC.PLATFORM_MACOS:
+            modifier_chain_separator = ''
+            modifier_mouse_separator = '-'
+            modifier_key_separator = ''
+            
+            if SHORTCUT_MODIFIER_META in self.modifiers:
                 
-                components.append( 'command' )
-                
-            else:
-                
-                components.append( 'ctrl' )
+                components.append( '\u2303' ) # ⌃, 'Control'
                 
             
-        
-        if SHORTCUT_MODIFIER_ALT in self.modifiers:
+            if SHORTCUT_MODIFIER_CTRL in self.modifiers:
+                
+                components.append( '\u2318' ) # ⌘, 'Command'
+                
             
-            components.append( 'alt' )
+            if SHORTCUT_MODIFIER_ALT in self.modifiers:
+                
+                components.append( '\u2325' ) # ⌥, 'Option'
+                
             
-        
-        if SHORTCUT_MODIFIER_SHIFT in self.modifiers:
+            if SHORTCUT_MODIFIER_SHIFT in self.modifiers:
+                
+                components.append( '\u21e7' ) # ⇧, 'Shift'
+                
             
-            components.append( 'shift' )
+        else:
+            
+            modifier_chain_separator = '+'
+            modifier_mouse_separator = '+'
+            modifier_key_separator = '+'
+            
+            if SHORTCUT_MODIFIER_META in self.modifiers:
+                
+                components.append( 'control' )
+                
+            
+            if SHORTCUT_MODIFIER_CTRL in self.modifiers:
+                
+                if HC.PLATFORM_MACOS:
+                    
+                    components.append( 'command' )
+                    
+                else:
+                    
+                    components.append( 'ctrl' )
+                    
+                
+            
+            if SHORTCUT_MODIFIER_ALT in self.modifiers:
+                
+                if HC.PLATFORM_MACOS:
+                    
+                    components.append( 'option' )
+                    
+                else:
+                    
+                    components.append( 'alt' )
+                    
+                
+            
+            if SHORTCUT_MODIFIER_SHIFT in self.modifiers:
+                
+                components.append( 'shift' )
+                
             
         
         if SHORTCUT_MODIFIER_GROUP_SWITCH in self.modifiers:
@@ -1155,9 +1246,16 @@ class Shortcut( HydrusSerialisable.SerialisableBase ):
             action_name += 'unknown key: {}'.format( repr( self.shortcut_key ) )
             
         
-        components.append( action_name )
-        
-        s = '+'.join( components )
+        if len( components ) > 0:
+            
+            action_separator_to_use = modifier_mouse_separator if self.shortcut_type == SHORTCUT_TYPE_MOUSE else modifier_key_separator
+            
+            s = f'{modifier_chain_separator.join( components )}{action_separator_to_use}{action_name}'
+            
+        else:
+            
+            s = action_name
+            
         
         if SHORTCUT_MODIFIER_KEYPAD in self.modifiers:
             

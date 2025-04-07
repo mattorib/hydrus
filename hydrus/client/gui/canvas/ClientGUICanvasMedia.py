@@ -55,6 +55,42 @@ zoom_centerpoints_str_lookup[ ZOOM_CENTERPOINT_VIEWER_CENTER ] = 'viewer center'
 zoom_centerpoints_str_lookup[ ZOOM_CENTERPOINT_MOUSE ] = 'mouse (or viewer center if mouse outside)'
 zoom_centerpoints_str_lookup[ ZOOM_CENTERPOINT_MEDIA_TOP_LEFT ] = 'media top-left'
 
+MEDIA_VIEWER_ZOOM_TYPE_DEFAULT_FOR_FILETYPE = 0
+MEDIA_VIEWER_ZOOM_TYPE_CANVAS = 1
+MEDIA_VIEWER_ZOOM_TYPE_100 = 2
+MEDIA_VIEWER_ZOOM_TYPE_FILL_X = 3
+MEDIA_VIEWER_ZOOM_TYPE_FILL_Y = 4
+MEDIA_VIEWER_ZOOM_TYPE_FILL_AUTO = 5
+
+MEDIA_VIEWER_ZOOM_TYPES = ( MEDIA_VIEWER_ZOOM_TYPE_DEFAULT_FOR_FILETYPE, MEDIA_VIEWER_ZOOM_TYPE_100, MEDIA_VIEWER_ZOOM_TYPE_CANVAS, MEDIA_VIEWER_ZOOM_TYPE_FILL_X, MEDIA_VIEWER_ZOOM_TYPE_FILL_Y, MEDIA_VIEWER_ZOOM_TYPE_FILL_AUTO )
+
+media_viewer_zoom_type_str_lookup = {
+    MEDIA_VIEWER_ZOOM_TYPE_DEFAULT_FOR_FILETYPE : 'default for filetype',
+    MEDIA_VIEWER_ZOOM_TYPE_CANVAS : 'canvas fit',
+    MEDIA_VIEWER_ZOOM_TYPE_100 : '100% zoom',
+    MEDIA_VIEWER_ZOOM_TYPE_FILL_X : 'fill horizontally',
+    MEDIA_VIEWER_ZOOM_TYPE_FILL_Y : 'fill vertically',
+    MEDIA_VIEWER_ZOOM_TYPE_FILL_AUTO : 'canvas fill'
+}
+
+media_viewer_zoom_type_description_lookup = {
+    MEDIA_VIEWER_ZOOM_TYPE_DEFAULT_FOR_FILETYPE : 'Allow the per-filetype rules to apply, no override.',
+    MEDIA_VIEWER_ZOOM_TYPE_CANVAS : 'Fit the media to the viewer, so it is as big as it can be.',
+    MEDIA_VIEWER_ZOOM_TYPE_100 : 'Set the zoom level to 100%.',
+    MEDIA_VIEWER_ZOOM_TYPE_FILL_X : 'Scale the media to fill the viewer width, even if that means it overflows.',
+    MEDIA_VIEWER_ZOOM_TYPE_FILL_Y : 'Scale the media to fill the viewer height, even if that means it overflows.',
+    MEDIA_VIEWER_ZOOM_TYPE_FILL_AUTO : 'Scale the media up to completely fill the whole viewer, even if that means it overflows.'
+}
+
+media_viewer_zoom_type_to_cac_simple_commands = {
+    MEDIA_VIEWER_ZOOM_TYPE_DEFAULT_FOR_FILETYPE : CAC.SIMPLE_ZOOM_DEFAULT_VIEWER_CENTER,
+    MEDIA_VIEWER_ZOOM_TYPE_CANVAS : CAC.SIMPLE_ZOOM_CANVAS_VIEWER_CENTER,
+    MEDIA_VIEWER_ZOOM_TYPE_100 : CAC.SIMPLE_ZOOM_100_CENTER,
+    MEDIA_VIEWER_ZOOM_TYPE_FILL_X : CAC.SIMPLE_ZOOM_CANVAS_FILL_X_VIEWER_CENTER,
+    MEDIA_VIEWER_ZOOM_TYPE_FILL_Y : CAC.SIMPLE_ZOOM_CANVAS_FILL_Y_VIEWER_CENTER,
+    MEDIA_VIEWER_ZOOM_TYPE_FILL_AUTO : CAC.SIMPLE_ZOOM_CANVAS_FILL_AUTO_VIEWER_CENTER
+}
+
 OPEN_EXTERNALLY_BUTTON_SIZE = ( 200, 45 )
 OPEN_EXTERNALLY_MAX_THUMBNAIL_SIZE = ( 200, 200 )
 
@@ -76,26 +112,30 @@ def CalculateCanvasMediaSize( media, canvas_size: QC.QSize, show_action ):
     return ( canvas_width, canvas_height )
     
 
-def CalculateCanvasZooms( canvas_size: QC.QSize, canvas_type: int, device_pixel_ratio: float, media, show_action ):
+def CalculateCanvasZooms( canvas_size: QC.QSize, canvas_type: int, device_pixel_ratio: float, media, show_action ) -> typing.Dict[ int, int ]:
+    
+    zoom_types_to_zooms = {
+        MEDIA_VIEWER_ZOOM_TYPE_DEFAULT_FOR_FILETYPE : 1.0,
+        MEDIA_VIEWER_ZOOM_TYPE_CANVAS : 1.0,
+        MEDIA_VIEWER_ZOOM_TYPE_FILL_AUTO : 1.0,
+        MEDIA_VIEWER_ZOOM_TYPE_FILL_X : 1.0,
+        MEDIA_VIEWER_ZOOM_TYPE_FILL_Y : 1.0,
+        MEDIA_VIEWER_ZOOM_TYPE_100 : 1.0
+    }
     
     if media is None:
         
-        return ( 1.0, 1.0 )
+        return zoom_types_to_zooms
         
     
     if show_action in ( CC.MEDIA_VIEWER_ACTION_DO_NOT_SHOW_ON_ACTIVATION_OPEN_EXTERNALLY, CC.MEDIA_VIEWER_ACTION_SHOW_OPEN_EXTERNALLY_BUTTON, CC.MEDIA_VIEWER_ACTION_DO_NOT_SHOW ):
         
-        return ( 1.0, 1.0 )
-        
-    
-    ( media_width, media_height ) = CalculateMediaSize( media, 1.0 )
-    
-    if media_width == 0 or media_height == 0:
-        
-        return ( 1.0, 1.0 )
+        return zoom_types_to_zooms
         
     
     new_options = CG.client_controller.new_options
+    
+    ( media_width, media_height ) = CalculateMediaSize( media, 1.0 )
     
     ( canvas_width, canvas_height ) = CalculateCanvasMediaSize( media, canvas_size, show_action )
     
@@ -107,6 +147,24 @@ def CalculateCanvasZooms( canvas_size: QC.QSize, canvas_type: int, device_pixel_
     height_zoom = raw_canvas_height / media_height
     
     canvas_zoom = min( ( width_zoom, height_zoom ) )
+    
+    image_aspect = media_width / media_height
+    canvas_aspect = raw_canvas_width / raw_canvas_height
+    
+    #overfill the canvas
+    if image_aspect > canvas_aspect:
+        
+        fill_auto_zoom = height_zoom
+        
+    else:
+        
+        fill_auto_zoom = width_zoom
+        
+    
+    zoom_types_to_zooms[ MEDIA_VIEWER_ZOOM_TYPE_CANVAS ] = canvas_zoom
+    zoom_types_to_zooms[ MEDIA_VIEWER_ZOOM_TYPE_FILL_X ] = width_zoom
+    zoom_types_to_zooms[ MEDIA_VIEWER_ZOOM_TYPE_FILL_Y ] = height_zoom
+    zoom_types_to_zooms[ MEDIA_VIEWER_ZOOM_TYPE_FILL_AUTO ] = fill_auto_zoom
     
     #
     
@@ -196,7 +254,9 @@ def CalculateCanvasZooms( canvas_size: QC.QSize, canvas_type: int, device_pixel_
         default_zoom = canvas_zoom
         
     
-    return ( default_zoom, canvas_zoom )
+    zoom_types_to_zooms[ MEDIA_VIEWER_ZOOM_TYPE_DEFAULT_FOR_FILETYPE ] = default_zoom
+    
+    return zoom_types_to_zooms
     
 
 def CalculateMediaContainerSize( media, device_pixel_ratio: float, zoom, show_action ) -> QC.QSize:
@@ -229,13 +289,6 @@ def CalculateMediaContainerSize( media, device_pixel_ratio: float, zoom, show_ac
         
         ( raw_media_width, raw_media_height ) = CalculateMediaSize( media, zoom )
         
-        '''if ClientGUICanvasMedia.ShouldHaveAnimationBar( media, show_action ):
-            
-            animated_scanbar_height = CG.client_controller.new_options.GetInteger( 'animated_scanbar_height' )
-            
-            media_height += animated_scanbar_height
-            '''
-        
         media_width = int( raw_media_width / device_pixel_ratio )
         media_height = int( raw_media_height / device_pixel_ratio )
         
@@ -245,9 +298,15 @@ def CalculateMediaContainerSize( media, device_pixel_ratio: float, zoom, show_ac
 
 def CalculateMediaSize( media, zoom ):
     
-    if media.GetMime() in HC.AUDIO or None in media.GetResolution():
+    if media.GetMime() in HC.AUDIO or not media.HasUsefulResolution():
         
         ( original_width, original_height ) = ( 360, 240 )
+        
+        if zoom >= 1:
+            
+            # audio player can only be scaled down, not up
+            return ( original_width, original_height )
+            
         
     else:
         
@@ -1374,7 +1433,7 @@ class MediaContainer( QW.QWidget ):
     launchMediaViewer = QC.Signal()
     readyForNeighbourPrefetch = QC.Signal()
     
-    zoomChanged = QC.Signal( float )
+    zoomChanged = QC.Signal( int, float )
     
     def __init__( self, parent, canvas_type, background_colour_generator, additional_event_filter: QC.QObject ):
         
@@ -1400,9 +1459,18 @@ class MediaContainer( QW.QWidget ):
         self._start_paused = False
         self._start_with_embed = False
         
-        self._default_zoom = 1.0
         self._current_zoom = 1.0
-        self._canvas_zoom = 1.0
+        
+        self._zoom_types_to_zooms = {
+            MEDIA_VIEWER_ZOOM_TYPE_DEFAULT_FOR_FILETYPE : 1.0,
+            MEDIA_VIEWER_ZOOM_TYPE_CANVAS : 1.0,
+            MEDIA_VIEWER_ZOOM_TYPE_FILL_AUTO : 1.0,
+            MEDIA_VIEWER_ZOOM_TYPE_FILL_X : 1.0,
+            MEDIA_VIEWER_ZOOM_TYPE_FILL_Y : 1.0,
+            MEDIA_VIEWER_ZOOM_TYPE_100 : 1.0
+        }
+        
+        self._current_zoom_type = self._GetDefaultZoomType()
         
         self._media_window = None
         
@@ -1500,6 +1568,18 @@ class MediaContainer( QW.QWidget ):
             
         
     
+    def _GetDefaultZoomType( self ):
+        
+        if self._canvas_type in CC.CANVAS_MEDIA_VIEWER_TYPES:
+            
+            return CG.client_controller.new_options.GetInteger( 'media_viewer_default_zoom_type_override' )
+            
+        else:
+            
+            return CG.client_controller.new_options.GetInteger( 'preview_default_zoom_type_override' )
+            
+        
+
     def _GetMaxZoomDimension( self ):
         
         if self._show_action in ( CC.MEDIA_VIEWER_ACTION_SHOW_WITH_MPV, CC.MEDIA_VIEWER_ACTION_SHOW_WITH_QMEDIAPLAYER ) or isinstance( self._media_window, Animation ):
@@ -1551,8 +1631,6 @@ class MediaContainer( QW.QWidget ):
                 
                 if isinstance( self._media_window, StaticImage ):
                     
-                    destroy_old_media_window = False
-                    
                     self._media_window.hide()
                     
                 else:
@@ -1567,8 +1645,6 @@ class MediaContainer( QW.QWidget ):
             else:
                 
                 if isinstance( self._media_window, Animation ):
-                    
-                    destroy_old_media_window = False
                     
                     self._media_window.hide()
                     
@@ -1648,7 +1724,7 @@ class MediaContainer( QW.QWidget ):
         self.move( self.pos() + delta )
         
     
-    def _SetZoom( self, zoom: float ):
+    def _SetZoom( self, zoom: float, move_delta = None ):
         
         self._current_zoom = zoom
         
@@ -1656,15 +1732,39 @@ class MediaContainer( QW.QWidget ):
         
         if self.size() != size_hint:
             
-            self.resize( size_hint )
+            if move_delta is not None and not move_delta.isNull():
+                
+                if isinstance( self._media_window, ClientGUIMPV.MPVWidget ) and CG.client_controller.new_options.GetBoolean( 'do_not_setgeometry_on_an_mpv' ):
+                    
+                    self._MoveDelta( move_delta )
+                    self.resize( size_hint )
+                    
+                else:
+                    
+                    self.setGeometry( QC.QRect( self.pos() + move_delta, size_hint ) )
+                    
+                
+            else:
+                
+                self.resize( size_hint )
+                
+            
+            self._SizeAndPositionChildren()
             
             if HC.PLATFORM_MACOS:
                 
                 self.update()
                 
             
+        else:
+            
+            if move_delta is not None:
+                
+                self._MoveDelta( move_delta )
+                
+            
         
-        self.zoomChanged.emit( self._current_zoom )
+        self.zoomChanged.emit( self._current_zoom_type, self._current_zoom )
         
     
     def _ShowHideControlBar( self ):
@@ -1799,9 +1899,9 @@ class MediaContainer( QW.QWidget ):
         
         if new_my_width > max_zoom_dimension or new_my_height > max_zoom_dimension:
             
-            ( limit_max_normal_zoom, limit_max_canvas_zoom ) = CalculateCanvasZooms( QC.QSize( max_zoom_dimension, max_zoom_dimension ), self._canvas_type, my_dpr, self._media, CC.MEDIA_VIEWER_ACTION_SHOW_WITH_NATIVE )
+            limit_max_zoom_types_to_zooms = CalculateCanvasZooms( QC.QSize( max_zoom_dimension, max_zoom_dimension ), self._canvas_type, my_dpr, self._media, CC.MEDIA_VIEWER_ACTION_SHOW_WITH_NATIVE )
             
-            new_zoom = limit_max_canvas_zoom
+            new_zoom = limit_max_zoom_types_to_zooms[ MEDIA_VIEWER_ZOOM_TYPE_CANVAS ]
             
             new_media_window_size = CalculateMediaContainerSize( self._media, my_dpr, new_zoom, CC.MEDIA_VIEWER_ACTION_SHOW_WITH_NATIVE )
             
@@ -1810,6 +1910,9 @@ class MediaContainer( QW.QWidget ):
             
         
         if new_zoom == self._current_zoom:
+            
+            # to handle a change in zoom type but no zoom
+            self.zoomChanged.emit( self._current_zoom_type, self._current_zoom )
             
             return
             
@@ -1820,6 +1923,8 @@ class MediaContainer( QW.QWidget ):
         new_size_fits = canvas_size.width() >= new_my_width and canvas_size.height() >= new_my_height
         
         #
+        
+        zoom_position_delta = QC.QPoint( 0, 0 )
         
         if my_width > 0 and my_height > 0:
             
@@ -1862,19 +1967,19 @@ class MediaContainer( QW.QWidget ):
             zoom_width_delta = my_width - new_my_width
             zoom_height_delta = my_height - new_my_height
             
-            centerpoint_adjusted_delta = QC.QPoint( int( zoom_width_delta * widths_centerpoint_is_from_pos ), int( zoom_height_delta * heights_centerpoint_is_from_pos ) )
-            
-            self._MoveDelta( centerpoint_adjusted_delta )
+            zoom_position_delta = QC.QPoint( int( zoom_width_delta * widths_centerpoint_is_from_pos ), int( zoom_height_delta * heights_centerpoint_is_from_pos ) )
             
         
         #
         
-        self._SetZoom( new_zoom )
+        # ok we had a crazy problem where after showing and hiding an mpv window, some rendering flag gets set which caused move/resize calls to be repainted immediately after call, causing move/resize flicker
+        # so now we set the geometry in one weird trick, and it seems Qt at the C++ level wraps it into the same update with that mystery flag on
+        self._SetZoom( new_zoom, move_delta = zoom_position_delta )
         
         self.RescueIfOffScreen()
         
         # due to the foolish 'giganto window' system for large zooms, some auto-update stuff doesn't work right if the convas rect is contained by the media rect, so do a refresh here
-        if new_zoom > self._canvas_zoom:
+        if new_zoom > self._zoom_types_to_zooms[ MEDIA_VIEWER_ZOOM_TYPE_CANVAS ]:
             
             self.update()
             
@@ -1988,7 +2093,7 @@ class MediaContainer( QW.QWidget ):
     
     def GetCanvasZoom( self ) -> float:
         
-        return self._canvas_zoom
+        return self._zoom_types_to_zooms[ MEDIA_VIEWER_ZOOM_TYPE_CANVAS ]
         
     
     def GetCurrentZoom( self ) -> float:
@@ -2020,7 +2125,7 @@ class MediaContainer( QW.QWidget ):
         return QC.QRect(
             QC.QPoint( 0, my_height - animated_scanbar_height ),
             QC.QSize( my_width, animated_scanbar_height )
-        )
+    )
         
     
     def GotoPreviousOrNextFrame( self, direction ):
@@ -2267,7 +2372,7 @@ class MediaContainer( QW.QWidget ):
         self._static_image_window.SetBackgroundColourGenerator( self._background_colour_generator )
         
     
-    def SetMedia( self, media: ClientMedia.MediaSingleton, maintain_zoom, maintain_pan, start_paused = None ):
+    def SetMedia( self, media: ClientMedia.MediaSingleton, maintain_zoom, maintain_zoom_type, maintain_pan, start_paused = None ):
         
         previous_media = self._media
         
@@ -2308,14 +2413,18 @@ class MediaContainer( QW.QWidget ):
         
         if maintain_zoom and previous_media is not None:
             
-            self.ZoomMaintain( previous_media )
+            self.ZoomMaintainingZoom( previous_media )
+            
+        elif maintain_zoom_type:
+            
+            self.ZoomToZoomType()
             
         else:
             
             self.ZoomReinit()
             
         
-        if not maintain_pan:
+        if previous_media is None or not maintain_pan:
             
             self.ResetCenterPosition()
             
@@ -2402,7 +2511,7 @@ class MediaContainer( QW.QWidget ):
             possible_zooms = [ exact_zoom ]
             
         
-        possible_zooms.append( self._canvas_zoom )
+        possible_zooms.append( self._zoom_types_to_zooms[ MEDIA_VIEWER_ZOOM_TYPE_CANVAS ] )
         
         bigger_zooms = [ zoom for zoom in possible_zooms if zoom > self._current_zoom ]
         
@@ -2414,21 +2523,16 @@ class MediaContainer( QW.QWidget ):
             
         
     
-    def ZoomMaintain( self, previous_media: ClientMedia.MediaSingleton ):
+    def ZoomMaintainingZoom( self, previous_media: ClientMedia.MediaSingleton ):
         
         if self._media is None:
             
             return
             
         
-        if previous_media is None:
+        if previous_media is None or not previous_media.HasUsefulResolution() or not self._media.HasUsefulResolution():
             
             self.ZoomReinit()
-            
-            return
-            
-        
-        if previous_media.GetMime() not in HC.MIMES_WITH_THUMBNAILS or self._media.GetMime() not in HC.MIMES_WITH_THUMBNAILS:
             
             return
             
@@ -2439,25 +2543,22 @@ class MediaContainer( QW.QWidget ):
         
         my_dpr = self.devicePixelRatio()
         
-        previous_current_zoom = self._current_zoom
-        
-        ( media_show_action, media_start_paused, media_start_with_embed ) = ClientMedia.GetShowAction( previous_media, self._canvas_type )
-        
-        if media_show_action in ( CC.MEDIA_VIEWER_ACTION_DO_NOT_SHOW_ON_ACTIVATION_OPEN_EXTERNALLY, CC.MEDIA_VIEWER_ACTION_DO_NOT_SHOW ):
-            
-            media_show_action = CC.MEDIA_VIEWER_ACTION_SHOW_OPEN_EXTERNALLY_BUTTON
-            
-        
-        ( previous_default_zoom, previous_canvas_zoom ) = CalculateCanvasZooms( canvas_size, self._canvas_type, my_dpr, previous_media, media_show_action )
-        
         ( media_show_action, media_start_paused, media_start_with_embed ) = ClientMedia.GetShowAction( self._media, self._canvas_type )
         
-        if media_show_action in ( CC.MEDIA_VIEWER_ACTION_DO_NOT_SHOW_ON_ACTIVATION_OPEN_EXTERNALLY, CC.MEDIA_VIEWER_ACTION_DO_NOT_SHOW ):
+        if media_show_action in ( CC.MEDIA_VIEWER_ACTION_DO_NOT_SHOW_ON_ACTIVATION_OPEN_EXTERNALLY, CC.MEDIA_VIEWER_ACTION_SHOW_OPEN_EXTERNALLY_BUTTON, CC.MEDIA_VIEWER_ACTION_DO_NOT_SHOW ):
             
-            media_show_action = CC.MEDIA_VIEWER_ACTION_SHOW_OPEN_EXTERNALLY_BUTTON
+            self.ZoomReinit()
+            
+            return
             
         
-        ( gumpf_current_zoom, self._canvas_zoom ) = CalculateCanvasZooms( canvas_size, self._canvas_type, my_dpr, self._media, media_show_action )
+        self._zoom_types_to_zooms = CalculateCanvasZooms( canvas_size, self._canvas_type, my_dpr, self._media, media_show_action )
+        
+        previous_current_zoom = self._current_zoom
+        
+        ( previous_show_action, previous_start_paused, previous_start_with_embed ) = ClientMedia.GetShowAction( previous_media, self._canvas_type )
+        
+        previous_zoom_types_to_zooms = CalculateCanvasZooms( canvas_size, self._canvas_type, my_dpr, previous_media, previous_show_action )
         
         # previously, we always matched width, but this causes a problem in dupe viewer when B has a little watermark on the bottom, spilling below bottom of screen
         # I think in future we will have more options regarding all this, and this method will change significantly
@@ -2496,7 +2597,7 @@ class MediaContainer( QW.QWidget ):
         # however we don't want to accidentally zoom in if the media we are switching to is larger. it'll spill over the bottom of the canvas
         # therefore let's have a little safety check
         
-        if previous_current_zoom == previous_default_zoom and previous_current_zoom <= previous_canvas_zoom * 1.05:
+        if previous_current_zoom == previous_zoom_types_to_zooms[ MEDIA_VIEWER_ZOOM_TYPE_DEFAULT_FOR_FILETYPE ] and previous_current_zoom <= previous_zoom_types_to_zooms[ MEDIA_VIEWER_ZOOM_TYPE_CANVAS ] * 1.05:
             
             # we were looking at the default zoom, near or at canvas edge(s), probably hadn't zoomed before switching comparison
             # we want to make sure our comparison does not spill over the canvas edge
@@ -2532,19 +2633,46 @@ class MediaContainer( QW.QWidget ):
         self._SetZoom( current_zoom )
         
     
-    def Zoom100( self ):
+    def Zoom100( self, zoom_center_type_override = None ):
         
-        self._TryToChangeZoom( 1.0 )
+        self._current_zoom_type = MEDIA_VIEWER_ZOOM_TYPE_100
         
-    
-    def ZoomCanvas( self ):
-        
-        self._TryToChangeZoom( self._canvas_zoom )
+        self._TryToChangeZoom( 1.0, zoom_center_type_override = zoom_center_type_override )
         
     
-    def ZoomDefault( self ):
+    def ZoomCanvas( self, zoom_center_type_override = None ):
         
-        self._TryToChangeZoom( self._default_zoom )
+        self._current_zoom_type = MEDIA_VIEWER_ZOOM_TYPE_CANVAS
+
+        self._TryToChangeZoom( self._zoom_types_to_zooms[ self._current_zoom_type ], zoom_center_type_override = zoom_center_type_override )
+        
+    
+    def ZoomCanvasFillX( self, zoom_center_type_override = None ):
+        
+        self._current_zoom_type = MEDIA_VIEWER_ZOOM_TYPE_FILL_X
+
+        self._TryToChangeZoom( self._zoom_types_to_zooms[ self._current_zoom_type ], zoom_center_type_override = zoom_center_type_override )
+        
+    
+    def ZoomCanvasFillY( self, zoom_center_type_override = None ):
+        
+        self._current_zoom_type = MEDIA_VIEWER_ZOOM_TYPE_FILL_Y
+
+        self._TryToChangeZoom( self._zoom_types_to_zooms[ self._current_zoom_type ], zoom_center_type_override = zoom_center_type_override )
+        
+    
+    def ZoomCanvasFillAuto( self, zoom_center_type_override = None ):
+        
+        self._current_zoom_type = MEDIA_VIEWER_ZOOM_TYPE_FILL_AUTO
+
+        self._TryToChangeZoom( self._zoom_types_to_zooms[ self._current_zoom_type ], zoom_center_type_override = zoom_center_type_override )
+        
+    
+    def ZoomDefault( self, zoom_center_type_override = None ):
+        
+        self._current_zoom_type = MEDIA_VIEWER_ZOOM_TYPE_DEFAULT_FOR_FILETYPE
+        
+        self._TryToChangeZoom( self._zoom_types_to_zooms[ self._current_zoom_type ], zoom_center_type_override = zoom_center_type_override )
         
     
     def ZoomMax( self ):
@@ -2615,7 +2743,7 @@ class MediaContainer( QW.QWidget ):
             possible_zooms = CG.client_controller.new_options.GetMediaZooms()
             
         
-        possible_zooms.append( self._canvas_zoom )
+        possible_zooms.append( self._zoom_types_to_zooms[ MEDIA_VIEWER_ZOOM_TYPE_CANVAS ] )
         
         smaller_zooms = [ zoom for zoom in possible_zooms if zoom < self._current_zoom ]
         
@@ -2637,9 +2765,11 @@ class MediaContainer( QW.QWidget ):
         canvas_size = self.parentWidget().size()
         my_dpr = self.devicePixelRatio()
         
-        ( self._default_zoom, self._canvas_zoom ) = CalculateCanvasZooms( canvas_size, self._canvas_type, my_dpr, self._media, self._show_action )
+        self._zoom_types_to_zooms = CalculateCanvasZooms( canvas_size, self._canvas_type, my_dpr, self._media, self._show_action )
         
-        self._SetZoom( self._default_zoom )
+        self._current_zoom_type = self._GetDefaultZoomType()
+        
+        self._SetZoom( self._zoom_types_to_zooms [ self._current_zoom_type ] )
         
     
     def ZoomSwitch( self, zoom_center_type_override = None ):
@@ -2649,26 +2779,58 @@ class MediaContainer( QW.QWidget ):
             return
             
         
-        if self._canvas_zoom == 1.0 and self._current_zoom == 1.0:
+        if self._zoom_types_to_zooms[ MEDIA_VIEWER_ZOOM_TYPE_CANVAS ] == 1.0 and self._current_zoom == 1.0:
             
             return
             
         
         if self._current_zoom == 1.0:
             
-            new_zoom = self._canvas_zoom
+            new_zoom = self._zoom_types_to_zooms[ MEDIA_VIEWER_ZOOM_TYPE_CANVAS ]
+
+            self._current_zoom_type = MEDIA_VIEWER_ZOOM_TYPE_CANVAS
             
         else:
             
             new_zoom = 1.0
             
+            self._current_zoom_type = MEDIA_VIEWER_ZOOM_TYPE_100
         
         self._TryToChangeZoom( new_zoom, zoom_center_type_override = zoom_center_type_override )
         
-        if new_zoom <= self._canvas_zoom:
+        if new_zoom <= self._zoom_types_to_zooms[ MEDIA_VIEWER_ZOOM_TYPE_CANVAS ]:
             
             self.ResetCenterPosition()
+
+    def ZoomSwitchCanvasThenFill( self, zoom_center_type_override = None ):
+        
+        if not self.IsZoomable():
             
+            return
+            
+        
+        if self._current_zoom == 1.0:
+            
+            new_zoom = self._zoom_types_to_zooms[ MEDIA_VIEWER_ZOOM_TYPE_CANVAS ]
+
+            self._current_zoom_type = MEDIA_VIEWER_ZOOM_TYPE_CANVAS
+            
+        elif self._current_zoom_type == MEDIA_VIEWER_ZOOM_TYPE_CANVAS:
+            
+            new_zoom = self._zoom_types_to_zooms[ MEDIA_VIEWER_ZOOM_TYPE_FILL_AUTO ]
+            
+            self._current_zoom_type = MEDIA_VIEWER_ZOOM_TYPE_FILL_AUTO
+            
+        else:
+            
+            new_zoom = 1.0
+
+            self._current_zoom_type = MEDIA_VIEWER_ZOOM_TYPE_100
+            
+        
+        self._TryToChangeZoom( new_zoom, zoom_center_type_override = zoom_center_type_override )
+        
+        self.ResetCenterPosition()
         
     
     def ZoomSwitch100Max( self ):
@@ -2678,7 +2840,7 @@ class MediaContainer( QW.QWidget ):
     
     def ZoomSwitchCanvasMax( self ):
         
-        self.ZoomSwitchMax( self._canvas_zoom )
+        self.ZoomSwitchMax( self._zoom_types_to_zooms[ MEDIA_VIEWER_ZOOM_TYPE_CANVAS ] )
         
     
     def ZoomSwitchMax( self, switch_base: float ):
@@ -2709,10 +2871,14 @@ class MediaContainer( QW.QWidget ):
                 
             
             new_zoom = max_zoom
+
+            self._current_zoom_type = MEDIA_VIEWER_ZOOM_TYPE_CANVAS
             
         else:
             
             new_zoom = switch_base
+
+            self._current_zoom_type = MEDIA_VIEWER_ZOOM_TYPE_100
             
         
         self._TryToChangeZoom( new_zoom )
@@ -2721,6 +2887,33 @@ class MediaContainer( QW.QWidget ):
             
             self.ResetCenterPosition()
             
+        
+    
+    def ZoomToZoomType( self, zoom_type = None ):
+        
+        if zoom_type is None:
+            
+            zoom_type = self._current_zoom_type
+            
+        
+        if self._media is None:
+            
+            return
+            
+        
+        # set up canvas zoom
+        
+        canvas_size = self.parentWidget().size()
+        
+        my_dpr = self.devicePixelRatio()
+        
+        ( media_show_action, media_start_paused, media_start_with_embed ) = ClientMedia.GetShowAction( self._media, self._canvas_type )
+        
+        self._zoom_types_to_zooms = CalculateCanvasZooms( canvas_size, self._canvas_type, my_dpr, self._media, media_show_action )
+        
+        self._current_zoom_type = zoom_type
+        
+        self._SetZoom( self._zoom_types_to_zooms[ self._current_zoom_type ] )
         
     
     def TIMERUIUpdate( self ):
@@ -2843,7 +3036,7 @@ class EmbedButton( QW.QWidget ):
         
         if needs_thumb:
             
-            thumbnail_path = CG.client_controller.client_files_manager.GetThumbnailPath( self._media )
+            thumbnail_path = CG.client_controller.client_files_manager.GetThumbnailPath( self._media.GetDisplayMedia().GetMediaResult() )
             
             thumbnail_mime = HydrusFileHandling.GetThumbnailMime( thumbnail_path )
             
@@ -2871,7 +3064,7 @@ class OpenExternallyPanel( QW.QWidget ):
         
         if self._media.GetLocationsManager().IsLocal():
             
-            qt_pixmap = CG.client_controller.GetCache( 'thumbnail' ).GetThumbnail( media ).GetQtPixmap()
+            qt_pixmap = CG.client_controller.GetCache( 'thumbnail' ).GetThumbnail( media.GetDisplayMedia().GetMediaResult() ).GetQtPixmap()
             
             thumbnail_dpr_percent = CG.client_controller.new_options.GetInteger( 'thumbnail_dpr_percent' )
             
@@ -3285,7 +3478,7 @@ class StaticImage( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
         
         self._my_shortcut_handler = ClientGUIShortcuts.ShortcutsHandler( self, self, [ shortcut_set ], catch_mouse = True )
         
-        CG.client_controller.sub( self, '_ClearCanvasTileCache', 'clear_image_tile_cache' )
+        CG.client_controller.sub( self, 'NotifyImageTileCacheCleared', 'clear_image_tile_cache' )
         CG.client_controller.sub( self, 'NotifyImageCacheCleared', 'clear_image_cache' )
         
     
@@ -3555,7 +3748,7 @@ class StaticImage( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
         i = itertools.product(
             range( topLeft_tile_coordinate[0], bottomRight_tile_coordinate[0] + 1 ),
             range( topLeft_tile_coordinate[1], bottomRight_tile_coordinate[1] + 1 )
-        )
+    )
         
         return list( i )
         
@@ -3623,7 +3816,7 @@ class StaticImage( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
                     # d8'        `8b   88    88      ,8P                          88
                     # 88          88 MM88MMM 88aaaaaa8P' 88 8b,     ,d8 ,adPPYba, 88 ,adPPYba,
                     # 88          88   88    88""""""'   88  `Y8, ,8P' a8P_____88 88 I8[    ""
-                    # Y8,    "88,,8P   88    88          88    )888(   8PP""""""" 88  `"Y8ba,
+                    # Y8,    "88,,8P   88    88          88   )888(   8PP""""""" 88  `"Y8ba,
                     #  Y8a.    Y88P    88,   88          88  ,d8" "8b, "8b,   ,aa 88 aa    ]8I
                     #   `"Y8888Y"Y8a   "Y888 88          88 8P'     `Y8 `"Ybbd8"' 88 `"YbbdP"'
                     #
@@ -3702,6 +3895,16 @@ class StaticImage( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
                 
                 CG.client_controller.gui.RegisterAnimationUpdateWindow( self )
                 
+            
+            self.update()
+            
+        
+    
+    def NotifyImageTileCacheCleared( self ):
+        
+        if self._media is not None:
+            
+            self._ClearCanvasTileCache()
             
             self.update()
             

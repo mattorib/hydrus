@@ -39,6 +39,8 @@ from hydrus.client.db import ClientDBDefinitionsCache
 from hydrus.client.db import ClientDBContentUpdates
 from hydrus.client.db import ClientDBFileDeleteLock
 from hydrus.client.db import ClientDBFilesDuplicates
+from hydrus.client.db import ClientDBFilesDuplicatesAutoResolutionSearch
+from hydrus.client.db import ClientDBFilesDuplicatesAutoResolutionStorage
 from hydrus.client.db import ClientDBFilesDuplicatesFileSearch
 from hydrus.client.db import ClientDBFilesDuplicatesSetter
 from hydrus.client.db import ClientDBFilesInbox
@@ -1341,7 +1343,7 @@ class DB( HydrusDB.HydrusDB ):
         
         self._cursor_transaction_wrapper.pub_after_job( 'notify_new_pending' )
         self._cursor_transaction_wrapper.pub_after_job( 'notify_new_tag_display_application' )
-        self._cursor_transaction_wrapper.pub_after_job( 'notify_new_force_refresh_tags_data' )
+        self._cursor_transaction_wrapper.pub_after_job( 'notify_force_refresh_tags_data' )
         
         self.pub_service_updates_after_commit( { service_key : [ ClientServices.ServiceUpdate( HC.SERVICE_UPDATE_DELETE_PENDING ) ] } )
         
@@ -1626,12 +1628,7 @@ class DB( HydrusDB.HydrusDB ):
             self.modules_files_metadata_basic.SetForcedFiletype( hash_id, mime )
             
         
-        hashes_that_need_refresh = self.modules_media_results.DropMediaResults( hash_ids_to_hashes )
-        
-        if len( hashes_that_need_refresh ) > 0:
-            
-            CG.client_controller.pub( 'new_file_info', hashes_that_need_refresh )
-            
+        self.modules_media_results.ForceRefreshFileInfoManagers( hash_ids_to_hashes )
         
     
     def _GenerateDBJob( self, job_type, synchronous, action, *args, **kwargs ):
@@ -1900,7 +1897,15 @@ class DB( HydrusDB.HydrusDB ):
         
         #
         
-        total_alternate_files = sum( ( count for ( alternates_group_id, count ) in self._Execute( f'SELECT alternates_group_id, COUNT( * ) FROM {current_files_table_name} CROSS JOIN duplicate_file_members USING ( hash_id ) CROSS JOIN alternate_file_group_members USING ( media_id ) GROUP BY alternates_group_id;' ) if count > 1 ) )
+        # first grab all the alternate groups that actually have more than one media id in them
+        useful_alternates_group_ids = { alternates_group_id for ( alternates_group_id, count ) in self._Execute( f'SELECT alternates_group_id, COUNT( * ) FROM duplicate_files CROSS JOIN alternate_file_group_members USING ( media_id ) GROUP BY alternates_group_id;' ) if count > 1 }
+        
+        boned_stats[ 'total_alternate_groups' ] = len( useful_alternates_group_ids )
+        
+        with self._MakeTemporaryIntegerTable( useful_alternates_group_ids, 'alternates_group_id' ) as temp_alternates_group_ids_table_name:
+            
+            total_alternate_files = sum( ( count for ( alternates_group_id, count ) in self._Execute( f'SELECT alternates_group_id, COUNT( * ) FROM {current_files_table_name} CROSS JOIN duplicate_file_members USING ( hash_id ) CROSS JOIN alternate_file_group_members USING ( media_id ) CROSS JOIN {temp_alternates_group_ids_table_name} USING ( alternates_group_id ) GROUP BY alternates_group_id;' ) if count > 1 ) )
+            
         
         boned_stats[ 'total_alternate_files' ] = total_alternate_files
         
@@ -2349,6 +2354,7 @@ class DB( HydrusDB.HydrusDB ):
             ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_HASH,
             ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_FILE_SERVICE,
             ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_FILE_RELATIONSHIPS,
+            ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_TAG_ADVANCED,
             ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_TAG_AS_NUMBER,
             ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_FILE_VIEWING_STATS
         }
@@ -3707,7 +3713,9 @@ class DB( HydrusDB.HydrusDB ):
             
             file_modified_timestamp_ms = file_import_job.GetFileModifiedTimestampMS()
             
-            self.modules_files_timestamps.SetTime( [ hash_id ], ClientTime.TimestampData.STATICFileModifiedTime( file_modified_timestamp_ms ) )
+            timestamp_data = ClientTime.TimestampData.STATICFileModifiedTime( file_modified_timestamp_ms )
+            
+            self.modules_files_timestamps.SetTime( [ hash_id ], timestamp_data )
             
             #
             
@@ -3723,7 +3731,9 @@ class DB( HydrusDB.HydrusDB ):
                 
                 content_update = ClientContentUpdates.ContentUpdate( HC.CONTENT_TYPE_FILES, HC.CONTENT_UPDATE_ADD, ( file_info_manager, now_ms ) )
                 
-                self.pub_content_update_package_after_commit( ClientContentUpdates.ContentUpdatePackage.STATICCreateFromContentUpdate( destination_file_service_key, content_update ) )
+                self.pub_content_update_package_after_commit(
+                    ClientContentUpdates.ContentUpdatePackage.STATICCreateFromContentUpdate( destination_file_service_key, content_update )
+                )
                 
             
             #
@@ -3744,7 +3754,9 @@ class DB( HydrusDB.HydrusDB ):
                 
                 content_update = ClientContentUpdates.ContentUpdate( HC.CONTENT_TYPE_FILES, HC.CONTENT_UPDATE_ARCHIVE, ( hash, ) )
                 
-                self.pub_content_update_package_after_commit( ClientContentUpdates.ContentUpdatePackage.STATICCreateFromContentUpdate( CC.COMBINED_LOCAL_FILE_SERVICE_KEY, content_update ) )
+                self.pub_content_update_package_after_commit(
+                    ClientContentUpdates.ContentUpdatePackage.STATICCreateFromContentUpdate( CC.COMBINED_LOCAL_FILE_SERVICE_KEY, content_update )
+                )
                 
             else:
                 
@@ -3758,12 +3770,8 @@ class DB( HydrusDB.HydrusDB ):
             
             #
             
-            hashes_dropped = self.modules_media_results.DropMediaResults( { hash_id : hash } )
-            
-            if len( hashes_dropped ) > 0:
-                
-                self._controller.pub( 'new_file_info', hashes_dropped )
-                
+            self.modules_media_results.ForceRefreshFileInfoManagers( { hash_id : hash } )
+            self.modules_media_results.ForceRefreshFileModifiedTimestamps( { hash_id : hash } )
             
             #
             
@@ -3821,6 +3829,8 @@ class DB( HydrusDB.HydrusDB ):
             {
                 'boned_stats' : self._GetBonedStats,
                 'duplicate_pairs_for_filtering' : self.modules_files_duplicates_file_query.GetPotentialDuplicatePairsForFiltering,
+                'duplicates_auto_resolution_actioned_pairs' : self.modules_files_duplicates_auto_resolution_search.GetActionedPairs,
+                'duplicates_auto_resolution_pending_action_pairs' : self.modules_files_duplicates_auto_resolution_search.GetPendingActionPairs,
                 'file_history' : self._GetFileHistory,
                 'file_info_managers' : self.modules_media_results.GetFileInfoManagersFromHashes,
                 'file_info_managers_from_ids' : self.modules_media_results.GetFileInfoManagers,
@@ -3855,6 +3865,7 @@ class DB( HydrusDB.HydrusDB ):
                 'client_files_subfolders' : self.modules_files_physical_storage.GetClientFilesSubfolders,
                 'deferred_delete_data' : self.modules_db_maintenance.GetDeferredDeleteTableData,
                 'deferred_physical_delete' : self.modules_files_storage.GetDeferredPhysicalDelete,
+                'duplicate_auto_resolution_rules_with_counts' : self.modules_files_duplicates_auto_resolution_storage.GetRulesWithCounts,
                 'file_duplicate_hashes' : self.modules_files_duplicates.GetFileHashesByDuplicateType,
                 'file_duplicate_info' : self.modules_files_duplicates.GetFileDuplicateInfo,
                 'file_hashes' : self.modules_hashes.GetFileHashes,
@@ -3877,6 +3888,7 @@ class DB( HydrusDB.HydrusDB ):
                 'missing_archive_timestamps_legacy_test' : self.modules_files_inbox.WeHaveMissingLegacyArchiveTimestamps,
                 'missing_repository_update_hashes' : self.modules_repositories.GetRepositoryUpdateHashesIDoNotHave,
                 'num_deferred_file_deletes' : self.modules_files_storage.GetDeferredPhysicalDeleteCounts,
+                'potential_duplicate_pairs' : self.modules_files_duplicates_file_query.GetPotentialDuplicatePairs,
                 'recent_tags' : self.modules_recent_tags.GetRecentTags,
                 'repository_progress' : self.modules_repositories.GetRepositoryProgress,
                 'repository_update_hashes_to_process' : self.modules_repositories.GetRepositoryUpdateHashesICanProcess,
@@ -3965,6 +3977,16 @@ class DB( HydrusDB.HydrusDB ):
                 'dissolve_alternates_group' : self.modules_files_duplicates.DissolveAlternatesGroupIdFromHashes,
                 'dissolve_duplicates_group' : self.modules_files_duplicates.DissolveMediaIdFromHashes,
                 'do_deferred_table_delete_work' : self.modules_db_maintenance.DoDeferredDeleteTablesWork,
+                'duplicate_auto_resolution_approve_pending_pairs' : self.modules_files_duplicates_auto_resolution_search.ApprovePendingPairs,
+                'duplicate_auto_resolution_deny_pending_pairs' : self.modules_files_duplicates_auto_resolution_search.DenyPendingPairs,
+                'duplicate_auto_resolution_do_resolution_work' : self.modules_files_duplicates_auto_resolution_search.DoResolutionWork,
+                'duplicate_auto_resolution_do_search_work' : self.modules_files_duplicates_auto_resolution_search.DoSearchWork,
+                'duplicate_auto_resolution_maintenance_fix_orphan_rules' : self.modules_files_duplicates_auto_resolution_storage.MaintenanceFixOrphanRules,
+                'duplicate_auto_resolution_maintenance_fix_orphan_potential_pairs' : self.modules_files_duplicates_auto_resolution_storage.MaintenanceFixOrphanPotentialPairs,
+                'duplicate_auto_resolution_reset_rule_search_progress' : self.modules_files_duplicates_auto_resolution_storage.ResetRuleSearchProgress,
+                'duplicate_auto_resolution_reset_rule_test_progress' : self.modules_files_duplicates_auto_resolution_storage.ResetRuleTestProgress,
+                'duplicate_auto_resolution_reset_rule_declined' : self.modules_files_duplicates_auto_resolution_storage.ResetRuleDeclined,
+                'duplicate_auto_resolution_set_rules' : self.modules_files_duplicates_auto_resolution_storage.SetRules,
                 'duplicate_set_king' : self.modules_files_duplicates.SetKingFromHash,
                 'file_maintenance_add_jobs' : self.modules_files_maintenance_queue.AddJobs,
                 'file_maintenance_add_jobs_hashes' : self.modules_files_maintenance_queue.AddJobsHashes,
@@ -4213,7 +4235,16 @@ class DB( HydrusDB.HydrusDB ):
         
         self._modules.append( self.modules_similar_files )
         
-        self.modules_files_duplicates = ClientDBFilesDuplicates.ClientDBFilesDuplicates( self._c, self.modules_files_storage, self.modules_hashes_local_cache, self.modules_similar_files )
+        self.modules_files_duplicates_auto_resolution_storage = ClientDBFilesDuplicatesAutoResolutionStorage.ClientDBFilesDuplicatesAutoResolutionStorage(
+            self._c,
+            self.modules_services,
+            self.modules_db_maintenance,
+            self.modules_serialisable
+        )
+        
+        self._modules.append( self.modules_files_duplicates_auto_resolution_storage )
+        
+        self.modules_files_duplicates = ClientDBFilesDuplicates.ClientDBFilesDuplicates( self._c, self.modules_files_storage, self.modules_hashes_local_cache, self.modules_similar_files, self.modules_files_duplicates_auto_resolution_storage )
         
         self._modules.append( self.modules_files_duplicates )
         
@@ -4299,7 +4330,15 @@ class DB( HydrusDB.HydrusDB ):
         
         #
         
-        self.modules_files_search_tags = ClientDBFilesSearch.ClientDBFilesSearchTags( self._c, self.modules_services, self.modules_tags, self.modules_files_storage, self.modules_mappings_counts, self.modules_tag_search )
+        self.modules_files_search_tags = ClientDBFilesSearch.ClientDBFilesSearchTags(
+            self._c,
+            self.modules_services,
+            self.modules_tags,
+            self.modules_tag_siblings,
+            self.modules_files_storage,
+            self.modules_mappings_counts,
+            self.modules_tag_search
+        )
         
         self._modules.append( self.modules_files_search_tags )
         
@@ -4349,6 +4388,20 @@ class DB( HydrusDB.HydrusDB ):
         )
         
         self._modules.append( self.modules_files_duplicates_setter )
+        
+        #
+        
+        self.modules_files_duplicates_auto_resolution_search = ClientDBFilesDuplicatesAutoResolutionSearch.ClientDBFilesDuplicatesAutoResolutionSearch(
+            self._c,
+            self.modules_files_storage,
+            self.modules_files_duplicates,
+            self.modules_files_duplicates_auto_resolution_storage,
+            self.modules_media_results,
+            self.modules_files_duplicates_file_query,
+            self.modules_files_duplicates_setter
+        )
+        
+        self._modules.append( self.modules_files_duplicates_auto_resolution_search )
         
     
     def _ManageDBError( self, job, e ):
@@ -5350,7 +5403,7 @@ class DB( HydrusDB.HydrusDB ):
             job_status.FinishAndDismiss( 5 )
             
             self._cursor_transaction_wrapper.pub_after_job( 'notify_new_tag_display_application' )
-            self._cursor_transaction_wrapper.pub_after_job( 'notify_new_force_refresh_tags_data' )
+            self._cursor_transaction_wrapper.pub_after_job( 'notify_force_refresh_tags_data' )
             
         
     
@@ -5605,7 +5658,7 @@ class DB( HydrusDB.HydrusDB ):
             job_status.FinishAndDismiss( 5 )
             
             self._cursor_transaction_wrapper.pub_after_job( 'notify_new_tag_display_application' )
-            self._cursor_transaction_wrapper.pub_after_job( 'notify_new_force_refresh_tags_data' )
+            self._cursor_transaction_wrapper.pub_after_job( 'notify_force_refresh_tags_data' )
             
         
     
@@ -5684,7 +5737,7 @@ class DB( HydrusDB.HydrusDB ):
             
             job_status.FinishAndDismiss( 5 )
             
-            self._cursor_transaction_wrapper.pub_after_job( 'notify_new_force_refresh_tags_data' )
+            self._cursor_transaction_wrapper.pub_after_job( 'notify_force_refresh_tags_data' )
             
         
     
@@ -5788,7 +5841,7 @@ class DB( HydrusDB.HydrusDB ):
             HydrusData.ShowText( 'Now the mappings cache regen is done, you might want to restart the program.' )
             
             self._cursor_transaction_wrapper.pub_after_job( 'notify_new_tag_display_application' )
-            self._cursor_transaction_wrapper.pub_after_job( 'notify_new_force_refresh_tags_data' )
+            self._cursor_transaction_wrapper.pub_after_job( 'notify_force_refresh_tags_data' )
             
         
     
@@ -5897,7 +5950,7 @@ class DB( HydrusDB.HydrusDB ):
             job_status.FinishAndDismiss( 5 )
             
             self._cursor_transaction_wrapper.pub_after_job( 'notify_new_tag_display_application' )
-            self._cursor_transaction_wrapper.pub_after_job( 'notify_new_force_refresh_tags_data' )
+            self._cursor_transaction_wrapper.pub_after_job( 'notify_force_refresh_tags_data' )
             
         
     
@@ -5993,7 +6046,7 @@ class DB( HydrusDB.HydrusDB ):
             
             job_status.FinishAndDismiss( 5 )
             
-            self._cursor_transaction_wrapper.pub_after_job( 'notify_new_force_refresh_tags_data' )
+            self._cursor_transaction_wrapper.pub_after_job( 'notify_force_refresh_tags_data' )
             
         
     
@@ -6317,7 +6370,7 @@ class DB( HydrusDB.HydrusDB ):
                     
                     message = 'Invalid tag scanning: {} bad tags found and fixed! They have been written to the log.'.format( HydrusNumbers.ToHumanInt( bad_tag_count ) )
                     
-                    self._cursor_transaction_wrapper.pub_after_job( 'notify_new_force_refresh_tags_data' )
+                    self._cursor_transaction_wrapper.pub_after_job( 'notify_force_refresh_tags_data' )
                     
                 
                 HydrusData.Print( message )
@@ -6529,7 +6582,7 @@ class DB( HydrusDB.HydrusDB ):
             
             job_status.FinishAndDismiss( 5 )
             
-            self._cursor_transaction_wrapper.pub_after_job( 'notify_new_force_refresh_tags_data' )
+            self._cursor_transaction_wrapper.pub_after_job( 'notify_force_refresh_tags_data' )
             
         
     
@@ -6571,7 +6624,7 @@ class DB( HydrusDB.HydrusDB ):
             
             if service_type == HC.TAG_REPOSITORY:
                     
-                CG.client_controller.pub( 'notify_new_force_refresh_tags_data' )
+                CG.client_controller.pub( 'notify_force_refresh_tags_data' )
                 
             
             self._cursor_transaction_wrapper.pub_after_job( 'notify_account_sync_due' )
@@ -6733,7 +6786,7 @@ class DB( HydrusDB.HydrusDB ):
             
             if service_type == HC.TAG_REPOSITORY:
                     
-                CG.client_controller.pub( 'notify_new_force_refresh_tags_data' )
+                CG.client_controller.pub( 'notify_force_refresh_tags_data' )
                 
             
             job_status.SetStatusText( prefix + ': done!' )
@@ -6848,7 +6901,7 @@ class DB( HydrusDB.HydrusDB ):
             job_status.FinishAndDismiss( 5 )
             
             self._cursor_transaction_wrapper.pub_after_job( 'notify_new_tag_display_application' )
-            self._cursor_transaction_wrapper.pub_after_job( 'notify_new_force_refresh_tags_data' )
+            self._cursor_transaction_wrapper.pub_after_job( 'notify_force_refresh_tags_data' )
             
         
     
@@ -9247,6 +9300,177 @@ class DB( HydrusDB.HydrusDB ):
                 
             
         
+        if version == 611:
+            
+            if not self._TableExists( 'main.duplicate_files_auto_resolution_rules' ):
+                
+                self._Execute( 'CREATE TABLE IF NOT EXISTS main.duplicate_files_auto_resolution_rules ( rule_id INTEGER PRIMARY KEY, actioned_pair_count INTEGER DEFAULT 0 );' )
+                
+            
+            if not self._TableExists( 'main.duplicates_files_auto_resolution_rule_count_cache' ):
+                
+                self._Execute( 'CREATE TABLE IF NOT EXISTS main.duplicates_files_auto_resolution_rule_count_cache ( rule_id INTEGER, status INTEGER, status_count INTEGER, PRIMARY KEY ( rule_id, status ) );' )
+                
+            
+            try:
+                
+                self._controller.frame_splash_status.SetSubtext( f'scheduling some maintenance work' )
+                
+                all_local_hash_ids = self.modules_files_storage.GetCurrentHashIdsList( self.modules_services.combined_local_file_service_id )
+                
+                with self._MakeTemporaryIntegerTable( all_local_hash_ids, 'hash_id' ) as temp_hash_ids_table_name:
+                    
+                    hash_ids = self._STS( self._Execute( f'SELECT hash_id FROM {temp_hash_ids_table_name} CROSS JOIN files_info USING ( hash_id ) WHERE mime = ?;', ( HC.IMAGE_JXL, ) ) )
+                    self.modules_files_maintenance_queue.AddJobs( hash_ids, ClientFiles.REGENERATE_FILE_DATA_JOB_FILE_METADATA )
+                    self.modules_files_maintenance_queue.AddJobs( hash_ids, ClientFiles.REGENERATE_FILE_DATA_JOB_FILE_HAS_TRANSPARENCY )
+                    self.modules_files_maintenance_queue.AddJobs( hash_ids, ClientFiles.REGENERATE_FILE_DATA_JOB_FILE_HAS_EXIF )
+                    self.modules_files_maintenance_queue.AddJobs( hash_ids, ClientFiles.REGENERATE_FILE_DATA_JOB_FILE_HAS_HUMAN_READABLE_EMBEDDED_METADATA )
+                    self.modules_files_maintenance_queue.AddJobs( hash_ids, ClientFiles.REGENERATE_FILE_DATA_JOB_FILE_HAS_ICC_PROFILE )
+                    self.modules_files_maintenance_queue.AddJobs( hash_ids, ClientFiles.REGENERATE_FILE_DATA_JOB_FORCE_THUMBNAIL )
+                    
+                
+            except Exception as e:
+                
+                HydrusData.PrintException( e )
+                
+                message = 'Some file maintenance failed to schedule! This is not super important, but hydev would be interested in seeing the error that was printed to the log.'
+                
+                self.pub_initial_message( message )
+                
+            
+        
+        if version == 615:
+            
+            found_some = False
+            
+            from hydrus.client.duplicates import ClientDuplicatesAutoResolution
+            
+            if self._TableExists( 'main.duplicate_files_auto_resolution_rules' ):
+                
+                try:
+                    
+                    result = self._Execute( 'SELECT actioned_pair_count FROM duplicate_files_auto_resolution_rules;' ).fetchone()
+                    
+                    do_it = True
+                    
+                except:
+                    
+                    do_it = False
+                    
+                
+                if do_it:
+                    
+                    rule_ids = self._STS( self._Execute( 'SELECT rule_id FROM duplicate_files_auto_resolution_rules;' ) )
+                    
+                    for rule_id in rule_ids:
+                        
+                        found_some = True
+                        
+                        table_core = f'duplicate_files_auto_resolution_pair_decisions_{rule_id}'
+                        
+                        for status in (
+                            ClientDuplicatesAutoResolution.DUPLICATE_STATUS_NOT_SEARCHED,
+                            ClientDuplicatesAutoResolution.DUPLICATE_STATUS_MATCHES_SEARCH_BUT_NOT_TESTED,
+                            ClientDuplicatesAutoResolution.DUPLICATE_STATUS_DOES_NOT_MATCH_SEARCH,
+                            ClientDuplicatesAutoResolution.DUPLICATE_STATUS_MATCHES_SEARCH_FAILED_TEST,
+                            ClientDuplicatesAutoResolution.DUPLICATE_STATUS_ACTIONED
+                        ):
+                            
+                            table_name = f'{table_core}_{status}'
+                            
+                            self._Execute( f'DROP TABLE IF EXISTS {table_name};' )
+                            
+                        
+                    
+                    self._Execute( 'DROP TABLE duplicate_files_auto_resolution_rules;' )
+                    
+                    self._Execute( 'DELETE FROM duplicates_files_auto_resolution_rule_count_cache;' )
+                    
+                    self.modules_serialisable.DeleteJSONDumpNamed( HydrusSerialisable.SERIALISABLE_TYPE_DUPLICATES_AUTO_RESOLUTION_RULE )
+                    
+                    if found_some:
+                        
+                        def notify_deleting_auto_resolution_rules():
+                            
+                            message = 'Hey, it looks like you participated in the duplicates auto-resolution test--thank you!\n\nUnfortunately, I have made some database changes that are incompatible with the old system, and I have to delete the old jpeg/png rule now. Sorry!'
+                            
+                            from hydrus.client.gui import ClientGUIDialogsMessage
+                            
+                            ClientGUIDialogsMessage.ShowInformation( None, message )
+                            
+                        
+                        self._controller.CallBlockingToQt( None, notify_deleting_auto_resolution_rules )
+                        
+                    
+                    self._Execute( 'CREATE TABLE IF NOT EXISTS main.duplicate_files_auto_resolution_rules ( rule_id INTEGER PRIMARY KEY );' )
+                    
+                
+            
+            #
+            
+            try:
+                
+                domain_manager = self.modules_serialisable.GetJSONDump( HydrusSerialisable.SERIALISABLE_TYPE_NETWORK_DOMAIN_MANAGER )
+                
+                domain_manager.Initialise()
+                
+                #
+                
+                domain_manager.OverwriteDefaultGUGs( [
+                    'e6ai tag search',
+                    'e621 tag search',
+                    'e926 tag search'
+                ] )
+                
+                domain_manager.OverwriteDefaultParsers( [
+                    'e621 file page api parser',
+                    'e621 gallery page api parser',
+                    'e621 pool api parser'
+                ] )
+                
+                domain_manager.OverwriteDefaultURLClasses( [
+                    'e6ai file page api',
+                    'e6ai file page',
+                    'e6ai gallery page api',
+                    'e6ai gallery page',
+                    'e6ai pools page api',
+                    'e6ai pools page',
+                    'e621 file page api',
+                    'e621 file page',
+                    'e621 gallery page api',
+                    'e621 gallery page',
+                    'e621 pools page api',
+                    'e621 pools page',
+                    'e926 file page api',
+                    'e926 file page',
+                    'e926 gallery page api',
+                    'e926 gallery page',
+                    'e926 pools page api',
+                    'e926 pools page'
+                ] )
+                
+                #
+                
+                domain_manager.TryToLinkURLClassesAndParsers()
+                
+                #
+                
+                self.modules_serialisable.SetJSONDump( domain_manager )
+                
+            except Exception as e:
+                
+                HydrusData.PrintException( e )
+                
+                message = 'Trying to update some downloader objects failed! Please let hydrus dev know!'
+                
+                self.pub_initial_message( message )
+                
+            
+            message = 'Hey, if you have any e621 subscriptions, the downloader is fixed this week--it recently stopped getting tags. You do not have to do anything.\n\nYour e621 subs will seem to find ~100 files the next time they run and then work through them real quick. There is nothing wrong--they are adapting, one time, to a new URL format. If you changed your e621 subscription to have a very high "normal checks" file limit, go edit them right now! 100 is proper.'
+            
+            self.pub_initial_message( message )
+            
+        
         self._controller.frame_splash_status.SetTitleText( 'updated db to v{}'.format( HydrusNumbers.ToHumanInt( version + 1 ) ) )
         
         self._Execute( 'UPDATE version SET version = ?;', ( version + 1, ) )
@@ -9398,7 +9622,7 @@ class DB( HydrusDB.HydrusDB ):
         
         if we_deleted_tag_service:
             
-            CG.client_controller.pub( 'notify_new_force_refresh_tags_data' )
+            CG.client_controller.pub( 'notify_force_refresh_tags_data' )
             
         
     

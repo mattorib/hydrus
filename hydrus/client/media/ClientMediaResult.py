@@ -165,6 +165,13 @@ class MediaResult( object ):
         return self._notes_manager.GetNumNotes() > 0
         
     
+    def HasUsefulResolution( self ):
+        
+        ( width, height ) = self.GetResolution()
+        
+        return width is not None and height is not None and width > 0 and height > 0
+        
+    
     def IsPhysicalDeleteLocked( self ):
         
         # TODO: ultimately replace this with metadata conditionals for whatever the user likes, 'don't delete anything rated 5 stars', whatever
@@ -238,6 +245,11 @@ class MediaResult( object ):
         
         self._tags_manager.ResetService( service_key )
         self._locations_manager.ResetService( service_key )
+        
+    
+    def SetFileInfoManager( self, file_info_manager ):
+        
+        self._file_info_manager = file_info_manager
         
     
     def SetTagsManager( self, tags_manager ):

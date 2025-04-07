@@ -20,7 +20,9 @@ SEARCH_TYPE_OR = 1
 
 class FileSystemPredicates( object ):
     
-    def __init__( self, system_predicates: typing.Collection[ ClientSearchPredicate.Predicate ] ):
+    def __init__( self, predicates: typing.Collection[ ClientSearchPredicate.Predicate ] ):
+        
+        system_predicates = [ predicate for predicate in predicates if predicate.GetType() in ClientSearchPredicate.SYSTEM_PREDICATE_TYPES ]
         
         self._has_system_everything = False
         
@@ -45,6 +47,8 @@ class FileSystemPredicates( object ):
         
         self._num_tags_predicates = []
         self._num_urls_predicates = []
+        
+        self._advanced_tag_predicates = []
         
         self._duplicate_count_predicates = []
         
@@ -147,7 +151,12 @@ class FileSystemPredicates( object ):
                 
                 ( hashes, hash_type ) = value
                 
-                self._common_info[ 'hash' ] = ( hashes, hash_type, predicate.IsInclusive() )
+                if 'hashes' not in self._common_info:
+                    
+                    self._common_info[ 'hashes' ] = []
+                    
+                
+                self._common_info[ 'hashes' ].append( ( hashes, hash_type, predicate.IsInclusive() ) )
                 
             
             if predicate_type in ( ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_AGE, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_LAST_VIEWED_TIME, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_MODIFIED_TIME, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_ARCHIVED_TIME ):
@@ -309,6 +318,11 @@ class FileSystemPredicates( object ):
                     
                 
             
+            if predicate_type == ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_TAG_ADVANCED:
+                
+                self._advanced_tag_predicates.append( predicate )
+                
+            
             if predicate_type == ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_TAG_AS_NUMBER:
                 
                 ( namespace, operator, num ) = value
@@ -431,6 +445,11 @@ class FileSystemPredicates( object ):
                 self._file_viewing_stats_predicates.append( ( view_type, desired_canvas_types, operator, viewing_value ) )
                 
             
+        
+    
+    def GetAdvancedTagPredicates( self ):
+        
+        return self._advanced_tag_predicates
         
     
     def GetAllowedFiletypes( self ):
@@ -797,6 +816,11 @@ class FileSearchContext( HydrusSerialisable.SerialisableBase ):
         self._predicates = predicates
         
         self._InitialiseTemporaryVariables()
+        
+    
+    def SetTagContext( self, tag_context: ClientSearchTagContext.TagContext ):
+        
+        self._tag_context = tag_context
         
     
     def SetTagServiceKey( self, tag_service_key ):

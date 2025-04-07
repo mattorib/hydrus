@@ -7,6 +7,336 @@ title: Changelog
 !!! note
     This is the new changelog, only the most recent builds. For all versions, see the [old changelog](old_changelog.html).
 
+## [Version 616](https://github.com/hydrusnetwork/hydrus/releases/tag/v616)
+
+### more media viewer stuff from a user
+
+* thanks to a user, we have some more media viewer updates--
+* first, if you use multiple media viewers from different tabs (especially complicated nested tabs), you can now set a 'close-media-viewer' shortcut action that does 'close-media-viewer-and-return-to-the-tab-that-opened-it'. a new checkbox under `options->media viewer` allows you to mandate this all the time
+* second, the media viewer 'eye' menu button has two new settings for setting 'always on top' and removing the window frame. these options are a little experimental and don't save just yet. have a play with them and let us know how it goes, especially on more unusual OSes
+
+### misc
+
+* you can now mix and match as many `system:hash` predicates in a query as you like. the UI will no longer consider them mutually exclusive when editing, and in the Client API, where you can force two at once, it no longer pseudorandomly chooses one to actually use
+* fixed export folders that have multiple sidecar routers that have the same file destination. previously only one of the sidecars was adding data and the others were doing nothing. (my recent 'genius' 'optimisation' code was going 'oh, that sidecar already exists, do not update it')
+* the export folder UI has a label on the sidecar section saying 'hey, export folders will not update pre-existing sidecar files, if you change them make sure to delete the existing sidecars and they will regenerate on next run'
+* when subscriptions hit their periodic file limit, they now compare the url classes of the new fetch with the oldest url class in the file log; if they differ, it no longer shows the 'subscription found x new URLs without running into any it had seen before' popup that offers the gap downloader! since in this case, the site/downloader has changed URL format, and the recommendation is to ignore the messages, I now no longer show the messages. we are doing this this week, so let me know how it goes
+* the 'search enabled' system, which on very old subscription presentation pages would allow for a search page that just presented files and had no search panel in the sidebar, is completely removed. the echoes of this thing have caused several typo problems over the years, was anti-KISS, and I intend to completely replace it with a nicer dynamic search freeze/sync system that will sync the page's current files to a fresh system:hash pred
+* the duplicate metadata merge options panel now has separate buttons on the tag service list for 'edit action' and 'edit filter'
+* the duplicate metadata merge options panel has a new label to clarify how ratings merge
+* the core Exception-handling routine can now handle an Exception with an empty string in its value
+* Errors that end up in a popup use the nicer log-printing routine to form their traceback, and they print to the log using this system too
+* errors with no trace no longer spam the stack twice
+
+### e621 and more
+
+* _tl;dr: today e621 is fixed to get tags again and I add e926 and e6ai. your subs will do some extra CPU work to catch up but it isn't a big deal_
+* the e621 sites have been changing their html recently, and it broke our parser--suddenly it wouldn't get tags any more. the good news is that someone let me know their API is excellent, so I am rolling out a fixed e621 downloader, and downloaders for e926 (their sfw alternative) and e6ai (their ai containment booru), and pool URL support too. since the API is so good, the downloader now runs extremely efficiently--all the normal 'post' data is provided at the gallery step, so e621 downloaders will hereafter only need to hit the gallery page and then they'll be downloading raw files directly. the only drawback here is the gallery parsing step eats a whack of CPU all at once, which you'll notice if you go bananas (issue #1698)
+* your e621 subscriptions will see the new direct file URLs and not be able to knit that together with the old Post URLs they already have. there is no nice technical way to get around this while keeping the nice new efficient downloader. we would normally be blitzed by the 'subscription found x new URLs without running into any it had seen before' popups that offer to open up the gap downloader, but I hate offloading that problem to user and have written in some new logic this week to detect the 'oh it is basically ok, the url format just changed' situation and silence the report in this case. luckily, your temporarily bloated e621 subs will process the 100-odd 'new' URLs they see very fast because there will be an md5 and raw file URL and e621 Post URL and tags to help it realise 'already in db'/'previously deleted'/'tag-blacklisted' without having to make any more network requests. serendipitously, this will actually help to fill in the gap of missing tags users have had over the past week or two. all users will get a popup about this on update. **if you changed your e621 subs to have a very high "normal checks" file limit, edit them before you update! 100 is proper**
+* several users were quicker than me, and I appreciate the suggestions and submissions. I made heavy use of an API parser one user made, fixing a couple tiny things and making it work for more domains, and that's what's rolling out today. you do not have to do anything--it should all just work. if you have added or played around with your own e621 parsers and today's update seems not to have worked, check out what's going on under `network->downloader components->url class links` and the other dialogs under there--worst case, if things aren't lining up, just delete everything 'e621' related and add back from the defaults
+
+### duplicates auto-resolution
+
+* thank you to the users who tried out the new system. although it works technically well, the common consensus is that it is _too_ automatic and needs A) the ability to pump the brakes and let humans better review what it is about to do and B) remember the pairs it actioned so humans can review what it just did. I am launching these features today for more testing and delaying the all-user launch of the system.
+* unfortunately, the changes I am making to the database are not compatible with the jpeg/png test rule from last week. on update, if you have the rule, you will get a popup saying 'hey, sorry, have to delete the rule now'. you can recreate it just as you did before, but the count it had of how many pairs it had processed has to be reset back to 0
+* you now choose if rules are going to be 'paused', where they do nothing, 'semi-automatic', where they will search and test but not action until the human approves, or 'fully automatic', where they will search, test, and then action entirely on their own (as before). new auto-resolution rules now start semi-automatic by default
+* beside the 'edit rules' button, there's now a 'review actions' button. double-clicking a row in the list now launches this. it opens up a panel for the selected rule with new thumbnail lists that show any semi-automatic pending pairs and the actioned pairs. they both allow multiple selection. the 'pending actions' page has approve/deny buttons, and the 'actions taken' has a powerful undo button that's wrapped in a scary yes/no confirmation. these panels are non-modal, meaning you can still use the program while they are open. the actioned audit log will often have fully deleted files so will present a blurhash or the hydrus default thumb, and any deleted files obviously won't launch in the media viewer
+* the thumbnail pair lists that show a pending action, which used to just show 'it will be this AB' vs 'could be either way around', now also says the duplicate action to be applied and an experimental summary of all content updates about to occur to both A and B. you'll see the tags, notes, urls, ratings, and archive actions--let me know how this works IRL, since I think we'll need some better sizing tech to make it all fit nice
+* a 'duplicate metadata merge options' that is set to 'always archive both' will now perform 'if one is archived, archive the other' if ran through the auto-resolution system. the auto-resolution edit UI says this explicitly. KISS answer to this sticky problem.
+* in the preview panel of the edit UI, the 'pairs that will be actioned' and 'pairs that will be skipped' lists are now collapsible
+* the cog icon on the duplicates auto-resolution sidebar now has 'reset test' and 'reset declined' to re-test all current pending/fail test results and undo all user-declined pairs
+* the main auto-resolution rule dialog now has some WOAH LAD red text at the top
+* updated the help with new screenshots and stuff for the new semi-automatic and fully automatic modes
+
+### boring duplicates auto-resolution stuff
+
+* all resolution rules and associated data will be deleted on update. sorry!
+* auto-resolution rules ditch the paused bool and now have a tri-state operation mode--paused, semi-automatic, and fully automatic. the semi-automatic does all the search and test work but queues 'ready to action' pairs for human approval. when a rule switches to fully automatic, all 'ready to action' pending pairs are sent back to be re-tested in the normal queue for KISS
+* added a new status for 'passes search, passes test, ready for actioning', with a custom pair storage table, to handle the semi-automatic mode where it prepares pairs and the human approves them
+* same deal but for 'user declined to action', for when the user does not approve
+* figured out the pipeline for this
+* added a table to log AB file pairs actioned. it records the duplicate action and the timestamp also. the 'pairs resolved' count is now generated from this live and stored in the normal count cache table
+* figured out the pipeline for this record
+* I vacillated and wrote some code to make the history try to 'live sync' to current data, but in the end I decided to go full non-changing audit log. if you dissolve a duplicate group and re-action the files with the same rule, the log will have two entries
+* if a rule's selector changes after editing, all pairs in the 'failed test' or 'ready to action' queues are now reset to 'passes search, ready to test'. relatedly, pair selectors can now equality-compare themselves to each other
+* the thumbnail pair lists that list duplicate merge summary data now calculate that third column in an async thread. previously this happened in one big block before the list was populated, but in future selector work will be high CPU (think comparing image similarity live), so it now happens on each list row as it comes into view. there's still a little more work to do here in the preview panel
+* refactored the new thumbnail list classes out to their own file and renamed some things to be more generic (for use in the new 'review actions' panel too)
+* if a user tries to edit the auto-resolution rules while any of the new preview windows is open, the preview windows are closed
+* the thumbnail lists now check if media it wants to open in the media viewer is local lol
+* cleaned up the 'reset search' and 'reset test' maintenance calls and improved efficiency
+* refactored how I move pairs from one database queue to another and cleaned it up a bit. a lot of maintenance and other reset stuff now all goes through this one location
+* a bunch of misc refactoring and cleanup of the auto-resolution db module
+
+### unit tests
+
+* added unit tests for the semi-automatic auto-resolution rule queueing, queue-fetching, and approval and denial processes
+* added unit tests for the audit log after all other unit tests commit actions
+* added a unit test to ensure changing the search resets searched pairs back to 'not searched'
+* added a unit test to ensure changing the selector resets tested pairs back to 'match search but not tested'
+* added a unit test to ensure changing from semi- to fully automatic resets 'ready to action' pairs back to 'not tested'
+
+### misc boring stuff
+
+* added a convenience function to the media results database module to fetch pairs of media results
+* made my static box change its size policy to fixed when it is collapsed--it now tucks itself away where before it was expanding to any available space
+* fixed the new auto-resolution unit tests for python 3.12+. thanks to a user for reporting--I was using the deprecated `assertNotEquals` instead of `assertNotEqual`
+* fixed some Mr Bones crazy text alignment and he now tells you in the duplicates panel to set to "all files every imported or deleted" to get better "all-time" numbers
+* Mr Bones now gives more accurate 'total files in alternate groups' numbers and also says the total number of alternate groups. previously, he was basically adding a bunch of duplicate files in there that were standing on their own and hadn't actually been set alternate to anything
+* updated my 'install help' Linux tab Wayland section to say 'yeah, best solution is X11 for now' with the two ways we know of getting that to work within Wayland. that's my Wayland policy going forward
+
+### client api
+
+* the Mr Bones call on the Client API now has a 'total_alternate_groups' key, reflecting the new number in the window
+* Client API version is now 79
+
+## [Version 615](https://github.com/hydrusnetwork/hydrus/releases/tag/v615)
+
+### duplicates auto-resolution brief
+
+* the system is ready for advanced users to try! there is one simple static rule available. check out the help https://hydrusnetwork.github.io/hydrus/advanced_duplicates_auto_resolution.html , go into the UI, and try out the suggested pixel-perfect jpg & png rule. I want to know if--
+   - it all makes sense to you
+   - where it runs smooth
+   - where it runs garbage
+   - any errors?
+   - out of interest, what do you get? Of ~800k potential pairs, I had ~6,000 jpg/png pixel pairs, resulting in ~4,700 total actual processed pairs (numbers shrink because multiple good files can share the same bad file). speed was bleh in the preview viewer (about 30 seconds to load the preview numbers) but nice when doing work: only a second or two to save the rule and then ~20k files/s in the search stage and 10 files/s in the processing stage. about 7 mins to ditch 7.5GB of Clipboard.png, hooray
+
+### duplicates auto-resolution
+
+* fleshed out the help page here: https://hydrusnetwork.github.io/hydrus/advanced_duplicates_auto_resolution.html it is linked in the main help directory, too, under 'advanced'
+* made it so you can double-click or enter/return any pass/fail test row in the auto-resolution preview panel to open that pair in a normal media viewer
+* added `work on these rules during idle/normal time` to the cog button on the auto-resolution sidebar tab
+* wrote up 'work hard' functionality and wired up the button--however I think I might remove this, since the system works well enough on its own. let me know what you think
+* reworked the preview panel to have a two-stage search. it spends a whack of CPU time fetching the total count of the search, and then the sample part works faster afterwards and can be hit over and over. it still sucks and I have another idea to speed things up, we'll see
+* updated the main duplicates auto-resolution maintenance routine to do the search step in blocks of 8192 rather than trying to do everything at once as soon as a rule is added. I hesitated doing this earlier, since the large one-time init search is more efficient, but we are going to be doing incremental searches in normal operation, so making small search chunks work well is not optional. I think the biggest potential weakness of this whole system is going to be incremental searches on new potential pairs when the potential duplicate pairs search of the auto-resolution rule has significant per-search overhead, but which searches will those be? sounds like we'll find out in the coming weeks. thankfully, jpg/png pixel dupes seems to scale excellently, so we are good for today
+
+### misc auto-resolution stuff
+
+* reduced flicker on the main 'auto-resolution' review panel as it works a real rule
+* fixed a 'hey I guess the auto-resolution preview panel is 1200px wide now' bug on certain rule-fetch validation errors
+* renamed 'A will pass' comparison UI labels to 'A will match'
+* the preview panel lists now scroll one row per scroll (it was doing 3 before, lol, and the default height is ~2 rows)
+* the auto-resolution preview panel (particularly the 'will be actioned' list, with its third column) should size itself better if you have large thumbnails
+* if the auto-resolution preview panel had results but the search changes and now we have no resullts, the test result lists will now appropriaterly clear themselves
+* the preview result lists now generally clear nicely before a new search is started, so if something actually goes wrong, you don't have old test results hanging around
+* fixed incremental potential duplicates search on non-pixel-duplicate searches
+
+### unit tests
+
+* wrote unit tests for the `MetadataConditional`
+* wrote unit tests for all the predicate types that can work in the `MetadataConditional`
+* wrote unit tests for the `Selector`
+* wrote unit tests for the one-file `Comparator`
+* wrote unit tests for auto-resolution rules: for editing at the db level; for syncing to existing, new, dissolved, and resolved potential duplicate pairs; performing search; performing resolution
+
+### misc
+
+* fixed a typo bug that broke the maintenance job that resets all potential duplicate pair search. it was related to the recent auto-resolution integration
+* fixed a typo bug that was stopping the 'review accounts' repository admin panel from opening
+* added an FAQ about the extensionless files that appear in your file storage if you sync with a repository
+* added `LINUX DEBUG: Do not allow combined setGeometry on mpv window` to `options->media playback`. if you have crashes on X11 in v614 when zooming mpv windows, give it a go and let me know what happens
+* thanks to a user, added a note to the install help that if you are on Linux & Wayland, adding the `WAYLAND_DISPLAY` environment variable, which forces the program to run in XWayland, seems to relieve many UI bugs (issue #1695)
+
+### boring cleanup
+
+* cleared out a surplus entry in db init related to duplicates auto-resolution
+* tweaked the 'don't show hovers/hide cursor if a dialog is open' tests in the media viewer, ignoring them if we are the child of one lol
+
+## [Version 614](https://github.com/hydrusnetwork/hydrus/releases/tag/v614)
+
+### misc
+
+* the new `system:tag (advanced)` edit panel now has a 'write/edit' tag autocomplete to help you quickly enter what you want to search
+* the `system:tag (advanced)` predicate now works in the system predicate parser. everything it produces should be pastable back into the tag autocomplete and it'll all just work (I believe even crazy situations, but let me know how you get on). it is somewhat error tolerant, so you can type just 'pending' instead of 'status is pending' etc.., but it is best if you get the colons, commas and quotes correct
+* reworded the labels in `system:tag (advanced)` to say 'ignoring siblings/parents' rather than just 'siblings'. I was thinking about this the wrong way when I first implemented it and forgot to realise and mention that when searching in the 'storage' domain, you are missing tag mappings that would be implicated by parent relationships too
+* thanks to a user, we have two new QSS styles--'catmocchin blue' and 'catmocchin lavender'. there are additional style and colour suggestions inside the QSS files themselves
+* the default image cache size under `options->speed and memory` is raised from 384MB to 1GB, which means by default the cache will hold on to a ~12,600x7,000px image and prefetch a ~9,700x5,500px one. it was previously tuned for 4k, but we are going to push a little further
+* `speed and memory` also lets you raise the prefetch cache percentage up to 25% (from 20%) (issue #1693)
+* I discovered that the bug in the media viewer where a static image will do a flickery resize--where on zoom it will move to position and then scale in two discrete frames--is triggered by loading the mpv window in that media viewer! it seems like mpv sets some deep 'immediate render' flag on the window. I hacked around a bit and believe I have fixed this bug. a rewrite of the entire media viewer layout system remains pending, but I think we fixed this very annoying thing!
+* I may have also fixed some other change-media flicker too, let me know how you get on
+* the 'macOS window position fix test' debug mode is now default behaviour. if you noticed your dialog windows were moving down like 26 pixels on every open in macOS, it should be better now! (issues #1681, #1673)
+* fixed a bug when searching files with 0 width or height (this is mostly a legacy issue) with a file-sort set to image ratio
+* if you try to run `profile mode` on python 3.12+, you now get a popup saying it is broke atm and hydev will fix
+
+### new media viewer tech
+
+* thanks to a user, we have some great new media viewer zoom and display options
+* there's a new zoom icon button in the top hover that lets you set some new zoom types: default for filetype, 100% zoom, canvas fit, fit horizontally, fit vertically, and canvas fill
+* also, we now have 'lock current zoom type'! so, you can switch to 'view this image as 100%', and that will stick for the next file as you browse back and forth
+* also, there's 'lock current pan'! useful for comparing duplicates at high zoom
+* _and_ there's 'try to lock current size', which copies my duplicate filter's 'lock zoom amount' tech for the normal media viewer
+* these three 'lock' options are saved, not per-media-viewer-session
+* you can say in `options->media playback` what zoom type you would like the viewer to default to. the default is 'default for filetype', lol, which I generally recommend, but you can set to always override all filetypes with 'canvas fill' or something if you like, particularly, say, on the preview viewer
+* also, under the 'eye' icon, or `options->media viewer`, you can now set the tags hover and/or top-right hover to not appear on mouseover!
+* the 'media viewer' shortcut set gets actions for the new zoom types, a new three-way zoom switch, and a new 'recenter media' action
+* I fixed a couple things with this for weird stuff like excepting audio and open externally panels. I also span out the duplicate filter zoom maintenance into its own thing and added it to the new menu as the 'lock current size' choice, reworked the options stuff a little to fit in with the existing per-filetype zoom settings, added some checkboxes to the menu for feedback, added the 'recenter-pan' action, and since graphics design is my passion I made a new icon for the advanced zoom settings icon button, yes it is a cog icon placed expertly over a magnifying glass
+* I think I fixed some zoom bugs in the duplicate filter with 'open externally' and audio panels
+
+### duplicates auto-resolution
+
+* _everything went great. should be launching the initial test for advanced users next week_
+* extended the new preview panel a bit--added a 'only sample this many' number widget, defaulting to 256, so you only start looking at a fast preview of the potentially tens of thousands of results; made sure the results always sort the same way (pseudorandom, but fixed); and added a third column to the 'pairs that will be actioned' list to show if the AB pair is fixed as you see or could be either way around
+* wired the potential duplicates storage module up to the auto-resolution storage module. when a potential pair is added or removed, the auto-resolution rules are now synced in the same transaction
+* buffed the 'add pairs' tech here to ensure even if the two modules get desynced somehow, the auto-resolution guy won't add dupes by accident
+* hooked the 'delete orphan rules' and 'fix orphan potential pairs' auto-resolution maintenance jobs up to the cog icon menu button in the auto-resolution sidebar panel
+* wrote some async code to handle waiting for any current work to finish before launching the edit dialog, and only allowing one edit dialog at a time
+* added a refresh button to the review panel
+* fixed up and finished the main 'set rules' pipeline, including generation and propagation of rule_id and counts cache
+* reworded the rule status summary text to put pertinent info at the front
+* hooked up the main search and resolution worker db calls
+* fixed a ton of stupid typos in the auto-resolution db code
+* enabled the UI, tried it out; the whole system works!
+* the UI is enabled for today, but the edit rules dialog will not save anything. non-advanced-mode users can also see the new tab now. I will take another week to write up some unit tests and help and do a more complicated IRL test. I also didn't have time to add the media viewer so I'll make sure that gets done. otherwise, we appear to be basically ready here. I'm feeling good about it, but I still want to be quite careful
+
+### boring cleanup
+
+* I cleared out some bad old and duplicated canvas zoom code, and I migrated some variable handling to use the smarter stuff in the new commit
+* replaced some laborious resolution validity-testing code with a single call in media result
+* cleaned up how potential duplicate pairs are deleted in the main duplicate files db module. it now happens through a handful of central locations rather than spammed all over the place, so the signalling to the auto-resolution module is a good bit simpler
+* fixed the permalink id in the client api help for `/get_files/thumbnail_path`. also fixed the example requests, which were also a sloppy copy/paste job from the 'thumbnail' command haha
+* fixed some `None` to `null` in the client api help response examples
+
+## [Version 613](https://github.com/hydrusnetwork/hydrus/releases/tag/v613)
+
+### misc
+
+* I think I have fixed the crazy flickering dialog resize bug where if you resize certain dialogs shorter or thinner than their parents, they might flicker throughout your resize motion between the size you are moving to and the height/width of the parent. there's still some occasional flicker due to some other legacy fuzzy padding hacks, but things are better
+* fixed some bad grammar for the namespace hide/show options in `options->tag presentation`, and split the non-namespace rendering settings out to their own box
+* when files are imported, any existing 'media result' object for the file is now properly updated with the new file modified time. you usually wouldn't notice this, because the media result typically isn't loaded until after import when we need to show it on screen, but in advanced cases where you were re-importing previously deleted files you are looking at or doing Client API work where you did a URL lookup before deciding to import, and the media result object from the URL lookup was still in memory, the 'media result' was not getting the timestamp and subsequent inspections or edits of the modified timestamp were failing as a result until the media result had a chance to decay out of its cache and be reloaded from disk
+* made some ratings update and sort code more safe against ratings service deletions
+* url classes now allow 'keep extra parameters for server' if you have an API/Redirect URL Converter. I _think_ the reasons for this originally being prohibited were only a fear, not anything grounded, but let's see how it goes
+
+### system predicate for advanced tag search
+
+* _after talking about it with people recently and having some good ideas, I decided to just push and try to knock this out. it is pretty clever and may have bugs, so let me know how it goes_
+* added a new `system:tag (advanced)` predicate, which does sophisticated tag searches. you enter a tag as raw text and can then--  
+    * specify which tag service it should search on, if different to the current tag context
+    * specify if it should include siblings or just be the raw tag on the 'storage' domain
+    * specify whether you should search current, deleted, pending, or petitioned mappings
+    * specify if the file _should_ or _should not_ have the tag mapping
+* I ran out of time to implement system predicate parsing, but I planned the pred's label to support this and will try to get it done next week
+* searches that include unified or deleted file domains or any other crazy stuff may take a very long time to return, but the underlying tag search code in hydrus is pretty robust, and extending it to the newer domains all just came together, so I think everything works. it should respond quickly to the cancel search button if it takes too long
+
+### duplicates auto-resolution
+
+* I had more success than expected with the new preview panel and I think we are now about two weeks away from the initial user test of this system
+* the edit duplicates auto-resolution rule dialog now has a live preview panel. it loads the pairs of a rule's search and then does the comparator/selector test to determine which pairs pass or fail, showing you the counts at each stage
+* the panel also shows the pass/fail thumbnail pairs with some new 'thumbnail table' widgets I wrote. these load thumbnails asynchronously and should scale up to thousands of pairs no prob. I am really happy with how it worked out, as this was the thing I was dreading would take weeks of rewrites, but I figured something out. it is ugly, as always, but it works
+* every time you show the panel page, it checks if the rule has changed. if search has changed, it re-runs the whole search, and if only the selector has changed, it just does a re-test
+* next week I'll add the ability to launch a particular pair into a standard Media Viewer so you can 'look closer' on the preview, and then I'll be doing final integration and testing. we are on the home stretch now!
+* _if you are an advanced user and you've poked around the duplicates auto-resolution UI previously, you might like to check out the preview panel this week on the default jpg vs png rule--does it all seem to load up sensible results, even though you can't zoom in yet? any errors? I'm guessing that loading thousands of pairs is going to be super slow, so what would be a good number to sample--256?_
+
+### boring cleanup
+
+* reworked the client thumbnail cache to work on the simpler and lower-lever `MediaResult` rather than the UI-level `Media`
+* fixed a couple areas where file maintenance jobs were being scheduled using the `Media` object
+* fixed some old areas within file maintenance where media objects had the wrong name
+* reworked and cleaned the main GetThumbnailPath RegenThumbnail file routines to similarly only work and talk about `MediaResult`
+* fixed a dumb typo in the as-yet-enabled `MetadataConditional` edit-panel
+* updated the faq with answers for why I work alone, do weekly releases, and use weird versioning
+* fixed a couple places where I had accidental `/n` in some label text lol, thanks to the user who pointed this out
+
+## [Version 612](https://github.com/hydrusnetwork/hydrus/releases/tag/v612)
+
+### misc
+
+* I added 'you can scan for this' flags for JXL for rotation EXIF, has EXIF, has non-EXIF, has transparency, and has ICC Profile, which we forgot to add when first rolling out JXL support. all existing JXL files will be scheduled for rescan of these properties on update, so if you have any wrongly rotated JXL, they should fix themselves soon after update (issue #1684)
+* the 'duration' duplicates filter comparison statement now says the +/-% difference in duration. if it is only +1%, it is now clearer
+* if a server gives a 429 (Too Many Requests) with a 'Retry-After' response header, hydrus now obeys this rather than its default server retry time as set in `options->connection` (issue #734)
+* added `help->debug->debug modes->macOS window position fix test` to test a fix for macOS windows always getting delta y position on init
+
+### drag-cancelling tech
+
+* the new drag-cancelling tech was false-positive cancelling fast drags where you moved the mouse outside of the window 200ms after the initial click press. this is fixed
+* the new drag-cancelling tech no longer occurs on macOS, since it was raising an error. it seems due to system policy you can't programatically cancel a drag on macOS in Qt (issue #1685)
+
+### sidecars in export folders
+
+* an export folder with sidecars will now fill in any sidecar gaps on every run. if a file should have a sidecar but currently does not, the sidecar will be generated (issue #1682)
+* an export folder set to 'synchronise' (which deletes files from the export destination if they are no longer in the export folder's search) will now be more careful not to delete sidecars
+
+### some running from source stuff
+
+* for users who run from source, the 'test' `PySide6` is updated from `6.8.1.1` to `6.8.2.1`, and the `qtpy` from `2.4.2` to `2.4.3`
+* added a `open_venv.ps1` script to easily activate the venv in powershell
+
+### duplicates auto-resolution
+
+* _my work this upcoming system grinds on. I successfully did the thing I stalled on a couple weeks ago, and now the only big thing I still have to do before advanced users can try it is a preview panel and a billion unit tests_
+* the database modules are live! they boot and will initialise their (as-yet empty) tables on update to v612
+* the daemon is now live! it runs its full mainloop and consults the database modules for work
+* rewrote some daemon-db interaction, mostly for KISS and deduplication of responsibility
+* figured out some tech to reset duplicates rule search progress on edits and user command
+* simplified the daemon workflow so that rules hold on to cached search counts and report their own search status
+* fixed some stuff in rule-setting and status fetching
+* the auto-resolution rule object is now serialisable and _could_ be saved to disk if I enabled the edit UI
+* rules now report their correct search status, no longer a placeholder
+* the daemon now reports the correct running status, no longer a placeholder
+
+## [Version 611](https://github.com/hydrusnetwork/hydrus/releases/tag/v611)
+
+### misc
+
+* I am pretty sure I fixed the long-time 'hey why did the scrollbar on this page of thumbs reset to the start position sometime while the page was hidden?' issue. an importer that adds new rows of thumbs in the background should now retain its scroll position. a window resize or a mass file removal event will cause the scrollbar to stay at the same relative num_rows vertical position, which we may ultimately want to be more sophisticated, but this is a good step for now. let me know if any specific situation still resets the vertical position
+* fixed an interesting bug with two of the Drag and Drops in the program, when you DnD a page tab or a selection of thumbnaills, where if you released your left-click at just the right moment (about 100ms after click press), you could get a DnD state that persisted despite no mouse button being down. a subsequent click would clear it. it seems that the DnD was spawning while the click release was already behind it in the event queue. the program now recognises this state and cancels the DnD
+* I believe I fixed an issue with the `apply image ICC Profile colour adjustments` entry on the media viewer's 'eye' menu button, precisely when you were looking at a file. the static image's private tile cache was not clearing itself correctly, and not calling for an update after the clear, so old yes/no ICC-profile-adjusted tiles were hanging around and sometimes poisoning future calls. the whole system clears itself properly now and seems to flip good every time
+* I believe I have fixed a macOS issue (and I think X11, too, if you have a taskbar on the top of the screen) where the hydrus window position-recording system would move your windows down a little way on every save/load cycle
+* all the 'write/edit' tag autocomplete inputs that have a list above them now send a copy shortcut to that top list when there is nothing selected in the text box and there are no results in the list below. so, if you open the 'manage tags' dialog, and the first thing you do is hit ctrl+c, you'll copy everything in the big list of existing tags. hit ctrl+shift+c, and you'll get the parents too
+* all the hardcoded 'copy' shortcut detection now happens through the same location and counts ctrl+c or ctrl/insert
+* if the 'is user ok to ok/cancel' dialog pre-close checks raise an error, I now have a catch for it. it says 'hey user, these checks threw an exception, please contact hydev, the data was probably broken so here is what to do next depending on whether you were oking or cancelling'. previously, you could be stuck with an unclosable dialog and have to quit the whole process
+* same deal but for the dialog 'is the data in the panel valid?' check--there is now a special catch and it tells you what happened and what to do
+* fixed a regression from last week's "make sure the new note is focused when the current tab changes" call, which was throwing a spurious error when you deleted the last note (issue #1679)
+* fixed an issue with my mpv rewind-spam catching code when you force it to load a file without any duration
+
+### file sort
+
+* if you change the file sort on a search with an explicit system:limit, and the sort is one that can operate at the database level, the search will now refresh
+* added a checkbox to `options->file search` to turn this off if you prefer
+* the file sort widget now has a tooltip saying whether the current sort type is simple enough to work with system:limit
+
+### stopping accidental page close
+
+* if you try to close a downloader that has any items in it, you'll now be asked if you are sure. this doesn't apply to session exit, just manual user close events
+* you can turn this confirmation off under `options->gui pages`
+* another checkbox under `gui pages`, this time default off, allows you to confirm all page closes. this mostly catches middle-clicking single page tabs, be that file search pages or 'page of pages'
+* the routines that delete multiple pages in one step 'close other pages' etc..., now do the 'is user ok to close these' in one combined step for all closees before closing anything. previously it tested and closed each in turn, and a cancel event broke out of the loop
+* various 'close these pages?' messages now correctly add up the number of sub-pages in 'page of pages' to be closed
+
+### long-time bug with non-updating media viewer is fixed
+
+* for ages we've had a weird issue where the media viewer, on some random file, will suddenly update when you click on ratings and things. the content signals are going through, and you can watch the file's respective thumbnail in the main gui getting archived or whatever, but the media viewer will not show it. this is finally fixed! it was basically a rare maintenance update issue, where if, for instance, a 'regen file metadata' job occured on a file in a media viewer's list after the media viewer was spawned, the media object in the viewer list was falling out of sync; able to send content updates but no longer hooked into the update pipeline so it never received them back again
+* this is fixed for the 'force filetype' action. this job now propagates to the UI much faster than before, no longer needing a full media result load
+* this is fixed for the file maintenance jobs that regen file metadata, check for 'has icc profile' etc.., and regen pixel/blurhash. all these jobs now propagate in the same way much faster to the UI
+* this is fixed for the file maintenance job that refetches the file's modified time from disk. same deal it now updates in UI faster
+* also fixed in the case where a previously known-of file is imported and we discover our old file info was incorrect, and also this file was in view so we need to sync the media result. sounds like a crazy situation but that's exactly when you need this to work
+
+### tag context in media
+
+* the thumbnail grid is now aware of the current tag context of the search (where you set 'all known tags' or 'my tags' or whatever in the autocomplete dropdown). `system:number of tags` now follows the current tag context
+
+### shortcuts
+
+* in an experiment, you can now set the modifier keys as their own shortcuts, with no accompanying 'real' key. it'll mark it as 'ctrl+nothing', 'shift+alt+nothing', etc.. seems to work, but I can't promise it won't go crazy in the wrong place
+* the keyboard shortcut widget, where you enter a shortcut, now uses a shortcut catching routine that is one level higher than before, which matches the actual shortcut processing system that's in use. there's a chance that if your Qt hardcode maps some shortcut, not allowing it in a text edit box, it'll work now (issue #1674)
+* the keyboard shortcut widget no longer shows its caret. it also takes keyboard focus more reliably when the edit shortcut dialog boots. I kind of like this but also don't, let me know if it is jarring
+* the 'shortcut report mode' will now say some information about unmappable key presses
+* I have prepped some render code to show shortcuts on macOS in the form ⌘Z, but I have not enabled it yet because I don't know enough about macOS. if you want your shortcut labels to look like this everywhere, let me know. but if shortcuts should only look like that in menus, and it isn't appropriate for the shortcuts dialog and debug labels and stuff, I'll put it off until we actually have menu shortcut labels lol
+
+### parsing
+
+* I added a 'STATIC' formula type. it just spits out the same static text, every time, and repeated n times if you need it
+* added a little help documentation for the new STATIC formula type; the edit panel links to it like for the other formulae
+* if your parsing test panel gets something that doesn't seem to be html or json, it no longer puts the goofy quote marks around it
+
+### boring code cleanup
+
+* did some misc refactoring in the page close testing code because the method names were whack
+* cleaned some sidebar and autocomplete interactions to work with 'tag context' instead of 'tag service key', which means these guys are now sending a richer object with more tag display info in it
+* cleaned up some duplicate variable handling all through the sidebar stuff
+* a bunch of redundant location context emit spam from the sidebar is deleted. I don't think this will break any weird thumbnail grid or previuw canvas location stuff , but we'll see in the edge cases
+* cleaned up how query autocomplete dropdowns and sidebar panels were communicating search state changes
+* ratings that fail to draw for whatever reason now do so more safely
+* removed code that did the old and canvas-desyncing media object update routine
+
 ## [Version 610](https://github.com/hydrusnetwork/hydrus/releases/tag/v610)
 
 ### misc
@@ -233,373 +563,3 @@ title: Changelog
 * the python mpv package is updated from `1.0.6` to `1.0.7` (test verison stays at `1.0.7`; there is nothing new)
 * twisted (the networking engine that runs the hydrus server and client api) now includes better TLS and http2 support
 * some import hacks that helped old PyInstaller navigate numpy and OpenCV bundling are removed
-
-## [Version 606](https://github.com/hydrusnetwork/hydrus/releases/tag/v606)
-
-### tag sort
-
-* when you group sorted tags by namespace, you can now force the order of the namespaces! this means you can have all the creator tags first, then the series, then the character, etc..., in any order you want. specifically, tag sorts in 'tag' or 'count' mode have a new 'group by namespace (user)' option that applies the sort override. you can set the namespaces you prefer under a new list in `options->sort/collect`, and the default is `[ creator, series, character, species, unnamespaced, meta ]`. any namespaces that do not fit will be grouped (a-z) underneath, just as before
-* sorry for taking so long to get to this. thankfully it worked out well, enough that I have set 'group by namespace (user)' the default for new clients; I recommend everyone who is familiar with normal booru namespace sort set this too under their `sort/collect` page
-* tag sort will handle some unusual unicode character comparisons (e.g. 'ß' vs 'ss') better
-* tag sort will now reliably sort non-ascii namespaces above unnamespaced tags when grouping by namespace
-
-### misc
-
-* the `database->view file history` chart now has checkboxes for all four lines. its code is cleaner and it now updates itself faster and nicer, and charts from old searches are now deleted promptly
-* fixed the position of the 'collection' thumbnail icon when you have the new 'show ratings on thumbs' set. also, the backing colour on the collection count now covers the icon; the colour of the backing panel and texts now feed off your current stylesheet; and I generally cleaned up how the icon and text position themselves
-* after last week's not-excellent background highlighting for ratings on thumbnails, I bit the bullet and just did a flat background with your normal qss window panel colour. inc/decs get a background too. it looks _fine_ and thumbnail ratings are now clear in all situations--it basically looks like the top-right hover now
-* the file right-click menu's top row flyout metadata submenu, which shows details like file modified time, now includes the exact file size in bytes
-* the top hover window's 'EXIF and other stuff' button is moved to the center button row, has a new 'page with text' icon, and is always available since it now will always show the contents of the flyout metadata submenu. you can thus now see the data in this menu from the archive/delete or duplicate filters
-
-### boring code cleanup
-
-* in bad-idea-cleanup twelve years in the making, refactored the 'listening media list' out of the navigable canvas subclasses. the underlying list is now handled inside the object rather than being the UI panel itself
-* the duplicate filter also gets some 'listening media list' cleanup. it handles its own content updates and the handling of what to do after deleting a file in the pair is now more safely wrapped inside the same atomic event
-* updated up an old 'remove media' pubsub, from the browser media viewer to the underlying thumbnail grid, to be a nicer Qt signal
-* updated the same thing from the archive/delete filter's commit, which can have special remove logic when the filter is complete, and replaced a hacky second-remove, which tries to catch users who hit F5 very quickly after an archive/delete is complete, with a popup that appears after two seconds to show slow commits actually happening--we'll see how it does IRL
-* fixed some recent 'woah that text-and-thing went to the right' bad layout in the 'edit shortcuts set' and 'edit subscription' panel--thank you for the reports
-* optimised some media result load
-* cleaned up some media result caching sync around the database repair code
-* deleted some static old colour defs that I missed in previous sweeps. now I updated the colours in the thumbnail collection stuff, none of them are used any more
-* reworked more garbage thumbnail ratings layout code
-* did some tag sorting KISS refactoring
-
-### duplicates auto-resolution
-
-* broke the new database module into two--one for the clever search side, the other for the simple storage side. the main (duplicates) db module will now see the storage and keep it updated on new/dissolved potential duplicate pairs
-* merged the rule-setting gubbins together into one 'set rules' command and added search-resetting code on search updates
-* wrote a status-count cache for quick review of rule progress
-* brushed up maintenance code for orphan rules and pairs
-* fleshed out the 'let's see if these unsearched pairs match our search' tech and the 'let's see if these search-matching pairs pass our auto-dupe rules, and if so, set the action' tech
-* refactored the media results generation and caching code from the monolithic `ClientDB` to a new module. the duplicates auto-resolution search module now talks to this guy
-* I still have to refactor a couple more things so I can wire this all up, but this should be simple work. all the difficult parts of the duplicates auto-resolution db stuff, except for one bit of incremental search I need to figure out, feel like they are fixed. only one big difficult hurdle (the rule preview UI) remaining!
-
-### future build
-
-* I am making a 'future' test build today--it should be in a post beside the normal build. it is the same as the normal build except it has jpeg-xl support and a number of libraries are updated to new versions. I would like advanced users to try it out and give me feedback on any boot problems. instructions are in the release post
-* build details--
-* PySide6 (Qt) is updated from `6.6.3.1` to `6.7.3` (test version is now `6.8.1.1`, which source users on Python 3.13 can run)
-* on macOS, PyQt6 (Qt) is updated from `6.6.0` to `6.7.1`
-* OpenCV (image stuff) is updated from `4.8.1.78` to `4.10.0.84`, which lets us update numpy (test version is now `4.11.0.86`)
-* numpy is switched from `<2.0.0` to `>=2.0.0`. this adds Python 3.13 support to hydrus for source users
-* pillow-jxl-plugin is added, and thereby we have Jpeg-XL support (thanks to some users for navigating this!)
-* the python mpv package is updated from `1.0.6` to `1.0.7` (test verison stays at `1.0.7`; there is nothing new)
-* twisted (the networking engine that runs the hydrus server and client api) now includes better TLS and http2 support
-* some import hacks that helped old PyInstaller navigate numpy and OpenCV bundling are removed
-
-## [Version 605](https://github.com/hydrusnetwork/hydrus/releases/tag/v605)
-
-### ratings on thumbnails
-
-* thanks to a user, ratings are now displayable in thumbnails! hit the new 'show in thumbnails' service checkbox in _services->manage services_ and that service's ratings will show
-* I updated this a bit and added a second option for 'show even when there is no rating value'
-* I played around with different backing colours to make these new ratings stand out more. in the end, my best solution was very hacky and isn't amazing--the stars in particular can get washed by a banner or busy thumb underneath. I tried a block of backing colour but it all looked worse. we may be approaching a 'just do it with svgs' moment for ratings rather than my decade-old painter primitives and coordinate lists. have a play with it and let me know what you think
-* I improved some rating drawing positioning, too--some stuff was off by half a pixel etc..
-* thumbnails now refresh when after a _manage services_ ok
-
-### misc
-
-* did a hotfix a couple hours after v604 release, v604a, to fix an issue with double/middle-clicking collection thumbnails to launch the media viewer
-* I deleted the Endchan /hydrus/ board and removed the links from the client and help. the board was intended as a bunker and never got much traffic, but the whole site being spammed this week reminded me that I don't want to own a board any more. if we ever need a bunker again, I'll revisit the issue
-* fixed some file-picker dialogs' name filters, which were not filtering to PNG or JSON correctly. all file dialogs that filter files this way now also offer `Any files (*)` as a second option
-* the Lain import downloaders dialog now filters the file-picker to .png files
-* I reworked the 'top hover file summary' settings under `options->media viewer` to their own box with a bit of extra text, and I renamed the complementary setting under `options->thumbnails` to the clearer "Show the media viewer's top hover file text in the status bar when a single thumbnail is selected"
-* I did a bunch of layout work this week, cleaning up how things position and expand to fill available screen space. there were several hundred things impacted and I did not have time to check everything that might have been changed. please let me know if some dialog has a help button that's weirdly aligned etc.., thank you!
-* cleaned up the reason-initialisation of the advanced file deletion dialog. the list of reasons is now much more item-position-stable and will not create duplicates when intersecting options clash. the selection rules are now simple: if all the file(s) have existing deletion reasons, this reason is listed, marked as the existing reason, and selected; otherwise, if the dialog is set to remember the previous deletion reason, this is listed and selected; otherwise, the "default" reason the dialog launches with is listed and selected. items have a more stable position as the list now always follows an order of (optional unique default shared reason, list of pre-defined reasons, optional unique shared existing reason, optional do-not-alter existing reason, custom reason), and items are marked in-place if they are interesting (issue #1653)
-* fixed 'do not verify https' network jobs for clients with a CA bundle set in their envs
-
-### duplicates
-
-* in a terminology change that matters in other places, the duplicate filter, for the current file index, no longer says 'A' or 'B': but now 'File One/File Two'
-* the comparison scores list in the mid-right duplicates hover window now says the total score difference as an actual number. let's see if the IRL scores are helpful as we move into making these rules more user-customisable
-
-### default downloaders
-
-* the e621 site has 'contributor' tags now, to distinguish VA talent or model makers from the primary artist. I was going to fold this into the normal default e621 parser as just another 'creator' tag, but the examples I found were pretty spammy so I'm not sure it is so useful, at least out of the box for normal users. if you are super interested in this, you might like to check out the new 'e621 file page parser with contributor tags' under `network->downloader components->manage url class links` for the `e621 file page` url class. the tags all seem to have `_(va)` kind of thing after them, so they wouldn't _confuse_ our existing creator tags, but it does seem like a lot of incidental spam and maybe it muddies things and should indeed be its own namespace in hydrus or just be ignored, idk, let me know what you think
-
-### style
-
-* thanks to a user, the e621 stylesheet gets some tweaks and better darkmode colours. check the new 'e621_redux' QSS. there's some some interesting new transparency tech on taglists
-
-### client api
-
-* fixed an issue with the `/manage_file_relationships/set_file_relationships` call and the 'set B as better' duplicate action (seen at times in other areas of the client, very rarely, as "set as worse" or "this is a worse duplicate") with `do_default_content_merge`--it was doing nothing, since there is no default for this action. now it fetches the normal 'set A as better' default options (also making sure to apply them the correct way around ha ha)
-* client api version is now 77
-
-### boring code cleanup
-
-* across the duplicates system, I've reworked a tangle of references to 'first' and 'second' or '1' and '2' to a unified 'A' and 'B' for our pair processing. in code and duplicates action settings, the A is the first file in the pair being actioned and B is the second. in a few places where we have yet determined AB, I now specifically use 1/2. it is arbitrary, but at least it is now clear
-* refactored the 'edit duplicate content merge options' panel to its own file and converted it to a non-scrolling widget so I can embed it in panels easier. it can also take SetValue calls after init and will reconfigure itself for different duplicate action types
-* did some more Qt Enum updates since my linter found a bunch more: `QPainter.RenderHint`, `QPainter.CompositionMode`, `QPalette.ColorRole`, `QColor.NameFormat`, `QFont.Weight`, `QFont.StyleHint`, `QFont.StyleStrategy`, `QImage.Format`, `QTextCursor.MoveOperation`, `QColorSpace.NamedColorSpace`, `QTextOption.WrapMode`
-
-* boring layout cleanup
-* I did some Qt research and fixed a jank expanding layout technique I use in ~90 different places. a bunch of panels should eat up extra pixels a little more reliably, with fewer cases of the invididual widgets all experiencing cosmological redshift or mysterious magical growing lower buffer space if the dialog grows
-* also fixed a bunch of bad sizer flags and stretch stuff used on my text&widget gridsizer that I use in ~190 places
-* fixed some crazy flags and layout used inside my text&widget gridsizer
-* fixed up some crazy layout in manage siblings
-* fixed some crazy popup toaster layout
-* fixed crazy layout in the login credentials edit panel
-* fixed some crazy layout in the shortcut action editing UI
-* fixed some crazy layout in the new duplicate pairs search context panel. it now expands to fill available space properly
-* fixed several options pages that didn't know what to do with extra space
-* the system:hash panel list now expands vertically
-* reworked the view options dialog under the `options->media playback` file list into one clean and lined-up gridbox
-
-### duplicates auto-resolution
-
-* finished the 'action' tab, which governs the duplicate type to apply to the pair, whether to delete A or B, and any custom duplicate content merge options
-* gave the rule dialog workflow a slight pass, particularly making the 'comparator' step define 'A' and 'B' rather than 'better' and 'worse'. my head was too into setting better/worse duplicates, which made things things awkward for same quality, alternates, or false positive actions. similarly, the 'action' step is now orienting towards position-specific 'A is better' verbs rather than 'yeah I guess set the better as better bro'. also, as before, as soon as this panel was finished, I immediately disabled it for the first test, ha ha
-* the one-file comparator can now do 'either A or B has property x' tests
-* added some safety code to the rule dialog
-* work still to do is: the master database search and caching code, the preview panel, which will load up some example pairs and show them in a nice way (⊙ _ ⊙ ), tying all the objects finally together and saving them to db, and then the daemon that'll work rules on demand and in the background. I feel ok about most of it, but the db stuff may be a nightmare, and the preview code, which will need thumbnails and media viewer tech from a dialog to be worth something, will definitely be one. it'll be great to finally have 'thumbs anywhere' tech though, so lfg
-
-## [Version 604](https://github.com/hydrusnetwork/hydrus/releases/tag/v604)
-
-### misc
-
-* fixed an odd and fairly recent bug where if you had an mpv window loaded in the preview panel--but it was paused--and then you changed pages back and forth, the mpv would not re-initialise itself with the previously paused media (nor really any media) unless you did some weird stuff where you clicked on another media and then changed pages again
-* system:filetype now supports exclusion (i.e. `system:filetype is not video`). also, the search system now allows multiple system:filetype predicates--it figures out the correct intersection (previously it just pseudorandomly selected one of them). the system predicate text parser can handle the new 'is not' operator, and I added a unit test to make sure it sticks
-* if you paste hashes with hash_type prefixes (e.g. `md5:775858135a6006db32f8ef0e5fa3102c`) into 'system:hash', it now auto-strips the prefix and sets the choice for you
-* the new 'fix missing file archived times' dialog pre-job now counts up and says the number of missing timestamps of each type it discovers. this thing seems to run at 100,000s of rows per second, so it turns out no worries
-* export folders should run a little bit faster now, especially to disks with higher latency (HDD or NAS, rather than a local SSD)
-* export folders now only do their sidecar exports if the respective file was actually copied this run (previously it looks like they were updating to the latest data on every run, aieeeeee!)
-* I've reworked the routine that draws the hover window into the background of the media viewer to more natively emulate out its layout and margin/spacer/etc.. sizes. the notes position still has some trouble, especially with difficult unicode, but it is better and now has justified text that properly expands to fill all the available space. this is now generally pixel perfect on my dev machine. while I am confident _some_ of it will survive janked QSS styles, some may not, so let me know what you see
-* the tags list in the background is now also pixel-perfect-positioned with its hover!
-* fixed the 'incdec' rating widget looking fuzzy in some places
-* the Edit Tag Filter Panel text inputs (and their paste buttons) are now add-only. previously, it would silently do add/remove logic on each item depending on whether it was already in the list, which is not helpful now we have big lists here. so, you can paste a big list of a hundred things and now it won't remove any stuff that was already in there
-* added `show file trash times/reason in top hover summary` checkboxes to `options->media viewer`, which expands the recent top hover summary stuff (issue #1652)
-* rejiggered some layout in the duplicates filter page sidebar panel. the search is its own box now, as is the options
-
-### sidecars
-
-* the import folder system now moves all possible sidecars when you have it set to 'move the source file'. it was previously still on the old system of just supporting a single 'filename.txt' sidecar format--now it does anything you have set up, live
-* the import folder UI has a couple new tooltips saying 'hey bro, delete and move actions will delete/move sidecars too, so if you have one sidecar for multiple files, make sure not to set the action to delete or move, or the next file will not have a sidecar to see'
-* hooked up/improved the edit sidecar panel test UI: the string processor button on the main sidecar 'metadata router' panel now loads up example strings from your actual importers and file paths; the string processor button on the edit single sidecar importer panel now loads up example strings from your actual file paths; the process that loads up expected result strings for the multi-column test panel is more tolerant to failure; the process that provides example test data to the sidecar importer panel is more tolerant to failure; and the importer panel's test no longer spams JSON garbage into the test context, what was I thinking. I also just cleaned some of this code
-
-### downloaders and network
-
-* thanks to a user, the e621 login script is fixed! if you have had errors with this recently, then the update _should_ just reset any error state and allow it to try again immediately, but if not, check `network->logins->manage logins` and make sure the `active` is set and hit `scrub invalidity/delays` if you need to (issue #1655)
-* updated the simple-tag shimmie file page parser to not grab 'popular tags' when those appear
-* I am removing the old deviant art file page parsers from the defaults. we removed the search a while ago, but there was limited drag and drop support until seemingly just recently. it looks like the whole site got a revamp. I had a very quick look at their new format, and while it may be possible to write a new parser, I will leave this to the user-run repo to handle if they wish. I understand the whole site is mostly wrapped up in OAuth stuff now, so I think imgbrd-grabber is probably a much better solution here going forward
-* the 'review bandwidth' panel gets a pass: its multi-column list ctrl is now wrapped in a nicer panel that has live buttons for edit/delete; the 'edit defailt rules' button now lists the 'global' rules; there's a little help label; and the 'search distance' column now shows your all-time total bandwidth use if you have 'show all' set. the individual network context bandwidth review panel (the one with the bar chart) also now shows your all-time usage. let's see what our all-time globals are lol
-* brushed up the 'getting started with downloaders/subscriptions' help a little bit
-* also expanded the 'bandwidth' section of this help and added a couple screenshots
-
-### old mpv dll
-
-* I am rolling back the Windows build's recent mpv update, back to the 2023-08 mpv dll. the 2024-10 dll caused stutter and slowdown with several users in the wider test, particularly Windows 10 guys. we'll revisit the topic in a future update round and see if we can select a better test candidate
-* for those source users who are still on the new dll (myself included), if your client does run into an APNG or webm/mkv that trips 100% CPU (it is some bananas silent logspam outputting too fast to process), this is now recognised after a couple seconds in the hydrus error handling and the file should unload itself with the "Sorry, this media appears to have a serious problem!" error dump-out
-
-### boring technical stuff
-
-* the archived-file delete-lock now plays with normal trash maintenance better. the 'do we have any trash files to delete?' method now works more flexibly and it can find stuff to delete even if the oldest 256 items are locked (previously it couldn't!)
-* on db update, everyone is going to get a file maintenance job queued up to check their images are all in the similar files system as desired. a recent bug caused some files not to re-register with the similar files system if they were re-imports. this job isn't super heavy on CPU or anything, so no worries, it'll just do its thing in the background and maybe fix up some holes
-* under `file->shortcuts`, the custom shortcuts list now forces unique names on adds and edits
-* the 'network report mode' in the `help->debug` menu now spams the Request and Response headers of each job. I also clarified, made error-safe, and added newlines to some of the other popups here to make things clearer when URLs are being transformed and so on
-* the `setup_desktop.sh` script now wraps the Exec line value in quotes, so this should now work if your hydrus install folder includes whitespace
-
-### boring code cleanup
-
-* harmonised my various daemons more into the parent `ManagerWithMainLoop` class, which now takes responsibility for the mainloop status tracking and pre-loop startup wait. the way these guys now do their pre-work wait is a little smarter and will react to early program shutdown and so on more cleanly and in the same reliable way
-* moved more old multi-column list calls to the newer methods that do cleaner post-edit select, scroll, and sort. this includes some stuff in parsing UI and manage services, so hopefully these lists will be just nicer to work with
-* made the newer multi-column list code even simpler when just adding one item
-* fixed up some more static superclass calls to `super()` in the autocomplete code
-* merged `CanvasWithDetails` and `CanvasWithHovers` so I'd be able to interrogate the hovers when figuring out the details layout gubbins
-* moved the 'open the media viewer from the preview panel' action from my old pubsub to a nicer Qt signal
-* fixed some crazy sizing in my 'select stuff from a list' quick dialog
-
-### duplicates auto-resolution
-
-* updated the Metadata Conditional objects to work on full file search contexts instead of single predicates
-* added inbox and archive support to the Metadata Conditional system
-* wrote edit UI for my 'pair selector/comparator' objects
-* refactored and decoupled my autocomplete dropdown classes in a couple little ways and wrote a new stripped-down autocomplete dropdown for the metadata conditional edit UI
-* wrote that first 'Edit Metadata Conditional' panel
-* the first version of the 'comparison' tab of the new duplicates auto-resolution UI is thus complete, and with that, I immediately disabled it like the 'search' tab, hahaha
-
-## [Version 603](https://github.com/hydrusnetwork/hydrus/releases/tag/v603)
-
-### misc
-
-* fixed a typo that caused the 'sort files by' menu to (ironically) sort by crazy means
-* fixed a bug with the time delta widget where the ms would not set to 0 when it initialised with a value that has no milliseconds component but the minimum allowed value had a milliseconds component
-* the 'force metadata refetch' thumbnail submenu now shows actions for just the focused file, and in the media viewer it now shows these actions for the current file (previously this submenu was accidentally a stub in the media viewer since there is no concept of a 'multi-file selection' up there)
-* the 'review bandwidth usage' panel now initialises its widgets immediately after it opens, not half a second later
-* added some safety code to ensure file re-imports (and probably some other weird file import situations) integrate correctly into the similar files system
-* added some EXPERIMENTAL options just for me to `options->speed and memory`
-
-### archived file delete lock
-
-* I have had a think about the delete lock in hydrus. I have never liked this system because it interacts with some complicated file service logic and inserts awkward logical workflow exceptions. furthermore, my initial implementation has not played well with multiple local file services. it was also imperfect, since certain signals to 'delete from all local services' or some odd variants of 'delete from trash' could skip the lock, and it disallowed removal of a file from one local file service even when the file was in others. several users have asked for various exceptions, either on an ad-hoc basis of for duplicate filtering. I played around with trying to fix and implement some of this stuff this week and realised I was digging an even worse hole for myself. I have decided to KISS and scale back what the lock does down to the simple emergency case of not wanting to lose nice things. **therefore: the archive-delete lock, henceforth, will only test for deleting files from the trash, i.e. a physical delete**
-* the option UI is updated to say this, and I cleaned up and updated a bunch of hellish hacky code all around here
-* the normal manual delete files dialog now filters the 'delete physically' and 'delete physically/no record' options according to the delete-lock, no moaning or popups
-* this is obviously a workflow switch, and I apologise for the inconvenience. I know the guys who care about this do care about it. I should not have tried to make it complicated in the first place. let me know what works and what doesn't, but I will insist on keeping this whole thing KISS going forward. if you use the trash for storage, please consider making a new local file service and putting your unusual 'maybe I'll delete it' files there
-
-### trash deletion rules
-
-* while I was poking around the archived file delete lock stuff above, I saw some hacky delete logic. in several semi-automatic systems I saw code that would say 'send the file to trash, unless it is already in the trash, in which case "upgrade" to physically delete it'. I am making the formal choice to no longer do this, and this code is now amended to say just 'send the file to trash if it isn't already there. specifically--
-* the duplicates filter page will no longer allow you to set a search domain in 'trash' or 'all local files' or 'all deleted files' (or, for advanced users, 'repository updates' lol). if it is somehow given a trashed file to process and receives a duplicate action that includes a file delete (like 'this is better, and delete the other'), it no longer tries to physically delete it; it just leaves it in the trash
-* the Client API `/manage_file_relationships/set_file_relationships` call is the same; when you say to `delete_a/b`, it'll now ensure the file goes to the trash and that's it
-* the archive/delete filter has long not allowed trashed files, but it too now no longer has any special logic for trashed files that it happens to encounter (e.g. the file is trashed by other means after the filter is created); it will now never provide a 'delete from hard disk' option in the final commit dialog. the top 'delete from' item in the commit choice, which is usually the current location context, is also filtered and selected more carefully for users who use multi-location search domains
-* the manual export and export folders now explicitly, when set to delete files, now send to trash; they never delete from the trash
-* I expect I've missed some clever situation, but typically, now, files are going to be physically deleted only if the `options->files and trash` settings kick in or you the user force it manually, and of course the new archived-file delete-lock prohibits this final step no matter the source
-
-### media viewer
-
-* fixed a bug where the top-right hover window was, when the mouse is over it and the media changes from one with no URLs to one with URLs, not be able to immediately figure out how tall the URLs list should be and was giving you a height-truncated window
-* I also, after some head banging and dark art, seem to have finally and properly fixed the annoying adjust-flicker that can happen to top-right hovers with urls or note hovers where a moment after showing it may grow three pixels taller etc... the top-right and center-right hovers now appear to size perfectly every single time; at least on Windows, I cannot break them even if I try. to keep things clean, I have removed some old hacks we built up over the years, but perhaps some of these are still relevent, so let me know how things appear on different OSes
-* I improved the (re)layout after you hide/show a note with middle/right-click. it _should_ recalculate its new size immediately
-* the notes that are drawn in the background of the media viewer are now always as wide as the hover window that pops up over them. I improved the padding calculations, so they are more closely aligned with the hover, but it isn't perfect yet--however I think I will be able to make it so in future
-* fixed a variety of issues with the media viewer volume button and its slider flyout. it could stay open on media change and in some cases open up if the mouse was over where the flyout should be on a media change, or flickering into just slightly the wrong overlapping location if the mouse comes in at the wrong angle. there's still a couple weird ways you can break it (e.g. sending a 'move media' keyboard shortcut while the mouse is over the slider), but I'll leave that for another day
-* fixed an issue with the media viewer's top hover window disappearing while your mouse was over the volume slider
-* reduced some change-media flicker with the seek bar in the media viewer
-
-### misc cleanup
-
-* I replaced a bunch of `isVisible` with `not isHidden` in Qt. I was using the former for some widget and panel hide/show situations, but they are not quite the same: `isVisible` tests up the ancestor heirarchy; `isHidden` tests only the given widget's visibility bool
-* reworded the 'blacklist' explanation a bit in 'getting started with downloaders' and added a screenshot
-* updated the Linux running from source help to talk about `libgthread`, the lack of which may stop Qt6 from booting
-* I cleaned up the `/manage_file_relationships/set_relationships` Client API call a little, including fixing a slightly incorrect object type that was missed in a recent rewrite of the duplicates content pipeline. I am not sure if this was causing any bugs, but it is better now
-* brushed up some of the labels/tooltips in the `options->file viewing statistics` page (issue #1644)
-* stopped the logging of a 'custom' `REQUESTS_CA_BUNDLE` with the new `options->connection` debug checkbox if it is what we would have set anyway (this was occuring if you went `file->restart`, since the new instance shares the same process/env)
-* fixed some unit tests for the new duplicate merge delete rules
-* did some misc linting
-
-### fixed up tag filter UI
-
-* everything is in layout boxes now, some collapsible
-* fixed up some layout flags so things are aligned or expand better, and the global namespaces list shouldn't have a scrollbar any more
-
-### macOS build
-
-* updated the macOS build script to retry the hdiutil dmg-building step multiple times in the very frequent case of it, seemingly, getting lock-kekked by XProtectBehaviorService (https://github.com/actions/runner-images/issues/7522)
-
-## [Version 602](https://github.com/hydrusnetwork/hydrus/releases/tag/v602)
-
-### media viewer top hover file info line
-
-* added four checkboxes to `options->media viewer` to alter what shows in the media viewer top hover window's file info summary line. you can say whether archived status is mentioned; and if it is, if there should be a timestamp; and you can say whether individual file services should be enumerated; and if so, whether they should have timestamps
-* this same line is reflected in the main gui status bar when you have the new `options->thumbnails` checkbox set on--so if you missed seeing your current local file services on the status bar, it should be doable now, and in a more compact way
-
-### archived times
-
-* there has been a bug for some time where if you import files with 'automatically archive' set in the file import options, an 'archive time' was not being recorded! this is now fixed going forward
-* for the past instances of this happening, I have written a new `database->file maintenance->fix missing file archived times` job to fill these gaps with synthetic values. it can also fill in gaps from before archive times were recorded (v474, in 2022-02)
-* on the v602 update, your client will scan for this. **if you have a large database, the update may take a couple minutes this week**. if you have either problem, it will point you to the new job
-* the job itself looks for both problems and gives you the choice of what to fix. for files imported since 2022-02, it assumes these were 'archive on import' files and inserts an archive time the same as the import time. for files imported before 2022-02, the synthetic values will be 20% between the import time and (any known deletion time or 2022-02), which is imperfect but I think it'll do
-
-### system predicates
-
-* the system tags for `duration`, `framerate`, `frames`, `width`, `height`, `notes`, `urls`, and `words` are now written `system: has/no xxxxx` rather than `system:xxxxx: has/no xxxxx`
-* the `system:file properties` UI panel is now a two-column grid. 'has xxxxx' on the left, 'no xxxxx' on the right
-* `system:has/no duration` added to `system:file properties` (it is also still in `system:duration`, but let's see how it goes having it in both places. I am 50% sold on the idea)
-* the 'paste image!' button in the `system:similar files` edit panel now understands file paths when they are copied from something like Windows Explorer. previously it was only reading bitmaps or raw text, but when you hit ctrl+c on an actual file, it actually gets encoded as a URI, which is slightly different to raw text. should work now!
-* fixed the `system:duration` predicate's string presentation around 0ms, where it would sometimes unhelpfully insert '+/- no duration' and other such weirdness
-* fixed the `system:duration` edit predicate window initialising with sub-second values. previously, the ms amount on the main value or the +/- were being zeroed
-* the various `NumberTest` objects across the program that have a +/- in absolute or percentage terms now test that boundary in an inclusive manner. previously it was doing `x < n < y`; now it does `x <= n <= y`, which satisfies 5 = 5 +/- 0, 6 = 4 +/- 50%, and 0 = 600 +/- 100%
-* the 'has/no' system pred shortcuts now all parse in the system predicate parser. the old format will still parse too. I added unit tests to check this, and more to fill in gaps for 'framerate' and 'num frames'
-
-### rating predicates specifically
-
-* system:rating search predicates are now edited separately, which means that in the edit panel, each rating widget has its own 'ok' button. you edit one at a time with a clearer workflow
-* the radio buttons involved here are now less confusing. no 'do not search' nonsense or 'is = NULL' to search for 'no rating'--you now just say 'has rating', 'no rating', or set the specific rating
-* the inc/dec system pred box now has quick-select choices for 'has count' and 'no count'
-* rating predicates have slightly simpler and nicer natural language labels. 'is like' and 'more than 2/3' rather than '= like' and '> 2/3'. 'count' instead of 'rating' for the inc/dec ratings. inc/dec rating predicates will also now swap in the new 'has count' and 'no count' too, rather than saying "> 0" explicitly
-* the system predicate parser is updated to handle the new 'count' labels (but the old format will still work, so nothing should break™). new unit tests check this
-* these panels now recover better from a predicate that refers to a service that no longer exists. in general, if you try to edit a bad pred (e.g. from an old session) it'll try to just ignore it and give you a popup letting you know
-
-### deleted similar files search
-
-* the similar files system no longer de-lists files from the search tree when they are deleted. phashes being disassociated from deleted files was not intentionally enforced before, but it was legacy policy from an old optimisation when the search tech was far more limited than today; now the file filtering tech is better, and we can handle it CPU wise, and I now intentionally want to keep them. it should be possible to search similar deleted files in future. the similar files search code can get pretty wew mode though, so I wouldn't be surprised if there are some bugs in odd 'all known files' situations
-* I do not think this functionality is _too_ useful, but we might want to build a 'oh we have seen this file before and we deleted it then, so stop this import' auto-tech one day, maybe, if we combine it with multiple/better similar files hashes, so keeping deleted file data in our search trees will be the policy going forward. although I regret these perceptual hash disassociations, the good news is that pixel hashes were never removed, and this will be more useful for this objective
-
-### misc
-
-* renamed 'human-readable embedded metadata' to 'embedded metadata' across the program, mostly just to stop it being so wide. I hate this system predicate, and with the jpeg stuff it is now a catch-all and basically useless as a discriminator. I have plans to replace it with a flexible all-in-one system that will integrate all the 'has icc profile' stuff together and bundle in fine search for 'jpeg:interlaced' or arbitrary EXIF data row search so you can search for what you actually want rather than the blanket 'uh some metadata I guess'
-* the 'move files now' dialog in `database->move media files` has a new 'run for custom time' button so you don't have to do 10/30/60/indefinite. note I also hate this whole system and want to replace it in the middle-term future with a background migration job, so fingers crossed this whole mess will be gone before long
-* when you manually lock the database with the Client API, the bottom-right status bar cell now says 'db locked'. when it is reading or writing, it now also just says 'db reading/writing' rather than 'db read/write locked'
-* the way the database updates the status bar with 'db reading' and stuff is now a little overhead efficient (it only updates the db cell, not the whole status bar)
-* clarified the text in `options->importing`
-* moved the 'default export directory' option from 'files and trash' to the new 'exporting' panel
-* if an SSLCertVerificationError occurs in a connection, the exception now has some extra info explaining the potential causes of the problem (issue #1642)
-
-### env stuff
-
-* I added a DEBUG checkbox to `options->connection` that explicitly sets the `REQUESTS_CA_BUNDLE` environment variable to your `certifi`'s `cacert.pem` path, assuming that path exists and the env variable has not already been set. I'd like to test this a bit and see if it helps or breaks any situations, and maybe force it one day, or add some more options. also, I don't know much about `CURL_CA_BUNDLE`, but if you want me to defer to that rather than `certifi` if it is already set, or you have other thoughts, let me know what you think
-* added `help->debug->data actions->show env`, which simply spams it to a popup and writes it to the log. it also splits up your various PATH vars for readability, but the list is usually giant so this is best actually read in the log rather than the popup atm. a couple other places where the env is spammed to screen also now uses this now format
-
-### Qt enum cleanup
-
-* fixed up more Qt5 Enums to the new Qt6 locations, including those now under `Qt.ItemDataRole`,  `Qt.ItemFlag`,  `Qt.SortOrder`, `Qt.ContextMenuPolicy`, `Qt.Key`, `Qt.KeyboardModifier`, `Qt.MouseButton`, `Qt.DropAction`, `Qt.AlignmentFlag`, `Qt.LayoutDirection`, `Qt.Orientation`,  `Qt.CursorShape`, `Qt.WidgetAttribute`, `Qt.WindowState`, `Qt.WindowType`, `Qt.GlobalColor`, `Qt.FocusReason`, `Qt.FocusPolicy`, `Qt.CheckState`, `Qt.TextElideMode`, `Qt.TextFormat`, `Qt.TextFlag`, `Qt.TextInteractionFlag`, `Qt.ShortcutContext`, `Qt.ScrollBarPolicy`, `Qt.TimerType`, `Qt.ToolButtonsTyle`, `Qt.PenStyle`, and `Qt.BrushStyle`
-* and `QEvent.Type`
-* and `QItemSelectionModel.SelectionFlag`
-
-### other code cleanup
-
-* cleaned up the recent 'make width sort before height in most places' hacks into something nicer
-* deleted the old 'Edit Multiple Predicates' panel py file, which was only handling the ratings stuff. was probably an interesting idea at some point, but it was too convoluted IRL, both for users and me to work with
-* decoupled some rating-to-stars and stars-to-rating rating conversion code out of the rating services object
-
-### new macOS App
-
-* sorry for no macOS App last week; github retired the old 'runner' that builds the App, and I missed the notifications. we are today updating from `macos-12` to `macos-13`, which appears to still work on intel machines
-* `macos-14`, whose migration will presumably come in a few years, will likely require Apple Silicon (ARM), at which point I'll have to tell older mac users to run from source, but that's a problem for the future
-
-## [Version 601](https://github.com/hydrusnetwork/hydrus/releases/tag/v601)
-
-### this page is still importing
-
-* when you try to close the client or a page of pages and one of the sub-pages protests with a reason like "I am still importing", you now get a yes/no dialog with an extra 'no, but show me the pages' button that will spawn a window listing buttons for every page that protested. clicking a button takes you to that page. this window is a frame, not a dialog, and will not go away on a click. if a page is susequently closed, clicking the button greys it out
-
-### misc
-
-* the 'archived time' pretty text string is no longer flagged as an 'uninteresting' line, which again, as intended, elevates it to the top hover window and main gui status bar if you have detailed info set to show
-* `system:width` is now before `system:height` in the `system:dimensions` flesh-out panel. I also hacked this in the 'edit multiple preds' panel for existing fleshed-out predicates, but it is a whack implementation like I did for the sort stuff last week. as I've discussed with some others, the real answer here is probably a `system:resolution` that combines the two
-* re-classified the 'move flag' DnD option under `options->exporting` as a BUGFIX option, and altered the tooltip
-* fixed the new `Set to "all my files" when hitting "Open files in a new duplicates filter page"` `options->duplicates` checkbox, which was not saving on dialog ok
-* changed the 'needs work' tab name suffix on the duplicates filter page to 'x% done'. it will max out at 99.9% and then hide, never rounding up to 100.0%
-* added `Hide the "x% done" notification on preparation tab when >99% searched:` to `options->duplicates` for those who always want to see this for any outstanding work
-
-### sidecar importers
-
-* multiline .txt note sidecar importing is fixed. I previously added some 'clear out empty lines' parsing input cleaning, but this collapsed multiline content by accident. this content-agnostic stage of import is not where cleanup should occur!
-* some explicit unit tests now test CRLF splitting and multiline note parsing from .txt files (previously it was just doing tags). multiline note sidecars have broken a couple times now, precisely because it was un-tested. it will not break for so stupid a reason again!
-* fixed some stupid scrollbars appearing on the 'destination' panel of the main 'metadata migration router' (sidecar job) edit panel, and made sure the 'note name' text input can't get super thin (issue #1634)
-* when a multi-column list is given multi-line content for a cell, it now says `[top line]... (+n lines)` so you know there was more (previously it just trancated to the top line). this now pops up in a couple of note parsing test panel places
-* notes are now specified as notes in the main sidecar path list with expected content (they looked a bit like tags before)
-* it isn't a big deal, but a thing that sorts the sidecar-imported text rows before handing them off to the exporter now only does a (namespace-aware) tag-sort if the exporter is tags, and otherwise just does a straight-up normal text sort
-
-### some dialog validation
-
-* the 'edit cookie' panel now strips leading and trailing whitespace from the name, value, domain, and path
-* the 'edit cookie' panel will now not allow an ok if you accidentally paste a newline into any of these values
-* the 'edit header' panel now strips leading and trailing whitespace from the key and value
-* the 'edit header' panel will now not allow an ok if you accidentally paste a newline into either either
-
-### boring linting cleanup
-
-* now my IDE no longer has a cheeky multi-Qt env, its linter went nuts about old to-be-deprecated Enum references so I did more cleanup
-* moved from QDialog.Accepted/Rejected to the Qt6-only DialogCode Enum reference. there were about 400 of these I think
-* and `QFileDialog.AcceptMode`, `QFileDialog.FileMode`, and `QFileDialog.Option`
-* and `QLineEdit.EchoMode`
-* and `QAbstractItemView.SelectionMode`, `QAbstractItemView.SelectionBehavior`, and `QAbstractItemView.EditTrigger`
-* and `QSlider.TickPosition`
-* and `QFrame.Shadow` and `QFrame.Shape`
-* and `QSizePolicy.Policy`
-* and `QToolButton.ToolButtonPopupMode`
-* and `QTabWidget.TabPosition`
-* and I played around with typing.cast in a few places to handle some custom panels here and there. it is ok!
-* also figured out some nicer typing in my newer command-processing menu generation code, and filled in some places where the Command Processor Mixin was needed
-* also fixed some bad test panel stuff in the ancient lookup script panels
-
-### Qt when running from source
-
-* **I no longer support Qt5!** it may run, depending on version, if you set up your own venv, but my `setup_venv` scripts no longer offer it as a choice and I will no longer fix any new non-trivial Qt5 bugs. if I didn't break it this week with all the Enum linting, then at some point I expect I will use a Qt6 technique for which there is no Qt5 equivalent and things will simply stop working
-* I cleaned up the Qt choice more in the `setup_venv` scripts, reducing it down to the one choice regarding Qt6 options and removing the '(m)iddle' choice in favour of simple old/new/test, and then a new '(q) for PyQt6' that just gets the latest PyQt6, and the '(w)rite your own'
-* the 'setup_venv' scripts now tell you that Python 3.13 is probably not going to work. they also say, in prep for when it will, in the '(w)rite your own' Qt version step, that Python 3.13's earliest version is 6.8.0.2. this is actually later than our current 'test' version, which is 6.7.something. I've now set up a 3.13 dev environment and did get the program booting but there seem to be problems with numpy<2.0.0. too, and then with scikit for psd-tools, which seems to have no Windows wheel, so I'll keep working here and update everything once I figure out something that will work out of the box. for now, assume python 3.13 is a no-go unless you know how to use pip. probably best to just wait six months for all the base stuff here to catch up and settle
-* I removed some Qt5 gubbins from the 'running from source' document
-
-### build stuff
-
-* updated a deprecated term in the Windows inno setup (the installer exe) user script
-* silenced a compiler warning about User-space-while-using-admin-installer in the Windows inno setup script. no good solution here, I think, but it isn't a huge deal

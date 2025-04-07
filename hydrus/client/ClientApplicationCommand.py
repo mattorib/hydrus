@@ -173,6 +173,19 @@ SIMPLE_NATIVE_OPEN_FILE_PROPERTIES = 160
 SIMPLE_NATIVE_OPEN_FILE_WITH_DIALOG = 161
 SIMPLE_RELOAD_CURRENT_STYLESHEET = 162
 SIMPLE_FLIP_ICC_PROFILE_APPLICATION = 163
+SIMPLE_ZOOM_100_CENTER = 164
+SIMPLE_ZOOM_CANVAS_VIEWER_CENTER = 165
+SIMPLE_ZOOM_CANVAS_FILL_X = 166
+SIMPLE_ZOOM_CANVAS_FILL_X_VIEWER_CENTER = 167
+SIMPLE_ZOOM_CANVAS_FILL_Y = 168
+SIMPLE_ZOOM_CANVAS_FILL_Y_VIEWER_CENTER = 169
+SIMPLE_ZOOM_CANVAS_FILL_AUTO = 170
+SIMPLE_ZOOM_CANVAS_FILL_AUTO_VIEWER_CENTER = 171
+SIMPLE_SWITCH_BETWEEN_100_PERCENT_AND_CANVAS_FIT_AND_FILL_ZOOM = 172
+SIMPLE_SWITCH_BETWEEN_100_PERCENT_AND_CANVAS_FIT_AND_FILL_ZOOM_VIEWER_CENTER = 173
+SIMPLE_ZOOM_DEFAULT_VIEWER_CENTER = 174
+SIMPLE_RESET_PAN_TO_CENTER = 175
+SIMPLE_CLOSE_MEDIA_VIEWER_AND_FOCUS_TAB = 176
 
 REARRANGE_THUMBNAILS_TYPE_FIXED = 0
 REARRANGE_THUMBNAILS_TYPE_COMMAND = 1
@@ -235,6 +248,7 @@ simple_enum_to_str_lookup = {
     SIMPLE_ARCHIVE_FILE : 'archive file',
     SIMPLE_CHECK_ALL_IMPORT_FOLDERS : 'check all import folders now',
     SIMPLE_CLOSE_MEDIA_VIEWER : 'close media viewer',
+    SIMPLE_CLOSE_MEDIA_VIEWER_AND_FOCUS_TAB : 'close media viewer and focus the tab the media came from, if possible',
     SIMPLE_CLOSE_PAGE : 'close page',
     LEGACY_SIMPLE_COPY_BMP : 'copy bmp of image',
     LEGACY_SIMPLE_COPY_LITTLE_BMP : 'copy small bmp of image for quick source lookups',
@@ -340,7 +354,10 @@ simple_enum_to_str_lookup = {
     SIMPLE_SWITCH_BETWEEN_CANVAS_AND_MAX_ZOOM : 'zoom: switch between canvas fit and max zoom',
     SIMPLE_ZOOM_100 : 'zoom: 100%',
     SIMPLE_ZOOM_CANVAS : 'zoom: canvas fit',
+    SIMPLE_ZOOM_CANVAS_VIEWER_CENTER : 'zoom to fit canvas with forced media viewer center',
     SIMPLE_ZOOM_DEFAULT : 'zoom: default',
+    SIMPLE_ZOOM_DEFAULT_VIEWER_CENTER : 'zoom: default with forced media viewer center',
+    SIMPLE_RESET_PAN_TO_CENTER : 'recenter media',
     SIMPLE_ZOOM_MAX : 'zoom: max',
     SIMPLE_SWITCH_BETWEEN_FULLSCREEN_BORDERLESS_AND_REGULAR_FRAMED_WINDOW : 'switch between fullscreen borderless and regular framed window',
     SIMPLE_SYNCHRONISED_WAIT_SWITCH : 'switch between searching a page immediately on new tags and waiting',
@@ -353,10 +370,19 @@ simple_enum_to_str_lookup = {
     SIMPLE_VIEW_PREVIOUS : 'media navigation: previous',
     SIMPLE_ZOOM_IN : 'zoom: in',
     SIMPLE_ZOOM_OUT : 'zoom: out',
+    SIMPLE_ZOOM_100_CENTER : 'zoom to 100% with forced media viewer center',
+    SIMPLE_ZOOM_CANVAS_FILL_X : 'fill canvas horizontally',
+    SIMPLE_ZOOM_CANVAS_FILL_X_VIEWER_CENTER : 'fill canvas horizontally with forced media viewer center',
+    SIMPLE_ZOOM_CANVAS_FILL_Y : 'fill canvas vertically',
+    SIMPLE_ZOOM_CANVAS_FILL_Y_VIEWER_CENTER : 'fill canvas vertically with forced media viewer center',
+    SIMPLE_ZOOM_CANVAS_FILL_AUTO : 'auto-fill closest dimension',
+    SIMPLE_ZOOM_CANVAS_FILL_AUTO_VIEWER_CENTER : 'auto-fill closest dimension with forced media viewer center',
     SIMPLE_EXIT_APPLICATION_FORCE_MAINTENANCE : 'exit program: close and force shutdown maintenance',
     SIMPLE_ZOOM_IN_VIEWER_CENTER : 'zoom: in with forced media viewer center',
     SIMPLE_ZOOM_OUT_VIEWER_CENTER : 'zoom: out with forced media viewer center',
     SIMPLE_SWITCH_BETWEEN_100_PERCENT_AND_CANVAS_ZOOM_VIEWER_CENTER : 'zoom: switch 100% and canvas fit with forced media viewer center',
+    SIMPLE_SWITCH_BETWEEN_100_PERCENT_AND_CANVAS_FIT_AND_FILL_ZOOM : 'zoom: switch 100% and canvas fit/fill',
+    SIMPLE_SWITCH_BETWEEN_100_PERCENT_AND_CANVAS_FIT_AND_FILL_ZOOM_VIEWER_CENTER : 'zoom: switch 100% and canvas fit/fill with forced media viewer center',
     SIMPLE_SHOW_DUPLICATES : 'file relationships: show',
     SIMPLE_DUPLICATE_MEDIA_DISSOLVE_FOCUSED_ALTERNATE_GROUP : 'file relationships: dissolve focused file alternate group',
     SIMPLE_DUPLICATE_MEDIA_DISSOLVE_ALTERNATE_GROUP : 'file relationships: dissolve alternate groups',
@@ -488,6 +514,7 @@ legacy_simple_str_to_enum_lookup = {
     'show_hide_splitters' : SIMPLE_SHOW_HIDE_SPLITTERS,
     'show_menu' : SIMPLE_SHOW_MENU,
     'switch_between_100_percent_and_canvas_zoom' : SIMPLE_SWITCH_BETWEEN_100_PERCENT_AND_CANVAS_ZOOM,
+    'switch_between_100_percent_and_canvas_fit_and_fill_zoom' : SIMPLE_SWITCH_BETWEEN_100_PERCENT_AND_CANVAS_FIT_AND_FILL_ZOOM,
     'switch_between_fullscreen_borderless_and_regular_framed_window' : SIMPLE_SWITCH_BETWEEN_FULLSCREEN_BORDERLESS_AND_REGULAR_FRAMED_WINDOW,
     'synchronised_wait_switch' : SIMPLE_SYNCHRONISED_WAIT_SWITCH,
     'unclose_page' : SIMPLE_UNCLOSE_PAGE,

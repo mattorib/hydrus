@@ -8,6 +8,7 @@ from qtpy import QtWidgets as QW
 from hydrus.core import HydrusConstants as HC
 from hydrus.core import HydrusData
 from hydrus.core import HydrusExceptions
+from hydrus.core import HydrusTags
 from hydrus.core import HydrusText
 from hydrus.core.files import HydrusFileHandling
 from hydrus.core.files.images import HydrusImageHandling
@@ -15,6 +16,7 @@ from hydrus.core.files.images import HydrusImageHandling
 from hydrus.client import ClientConstants as CC
 from hydrus.client import ClientGlobals as CG
 from hydrus.client import ClientImageHandling
+from hydrus.client import ClientLocation
 from hydrus.client.gui import ClientGUIDialogsMessage
 from hydrus.client.gui import ClientGUIFunctions
 from hydrus.client.gui import ClientGUIOptionsPanels
@@ -26,6 +28,7 @@ from hydrus.client.gui.widgets import ClientGUICommon
 from hydrus.client.gui.widgets import ClientGUINumberTest
 from hydrus.client.gui.widgets import ClientGUIRegex
 from hydrus.client.metadata import ClientRatings
+from hydrus.client.metadata import ClientTags
 from hydrus.client.parsing import ClientParsing
 from hydrus.client.search import ClientNumberTest
 from hydrus.client.search import ClientSearchPredicate
@@ -1140,6 +1143,7 @@ class PanelPredicateSystemFramerate( PanelPredicateSystemSingle ):
         return predicates
         
     
+
 class PanelPredicateSystemHash( PanelPredicateSystemSingle ):
     
     def __init__( self, parent, predicate ):
@@ -1270,6 +1274,7 @@ class PanelPredicateSystemHash( PanelPredicateSystemSingle ):
         return predicates
         
     
+
 class PanelPredicateSystemHasNoteName( PanelPredicateSystemSingle ):
     
     def __init__( self, parent, predicate ):
@@ -3004,6 +3009,163 @@ class PanelPredicateSystemSize( PanelPredicateSystemSingle ):
         ( size, unit ) = self._bytes.GetSeparatedValue()
         
         predicates = ( ClientSearchPredicate.Predicate( ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_SIZE, ( self._sign.GetValue(), size, unit ) ), )
+        
+        return predicates
+        
+    
+
+class PanelPredicateSystemTagAdvanced( PanelPredicateSystemSingle ):
+    
+    def __init__( self, parent, predicate ):
+        
+        super().__init__( parent )
+        
+        self._inclusive = ClientGUICommon.BetterRadioBox( self, [ ( 'has tag', True ), ( 'does not have tag', False ) ], vertical = True )
+        
+        self._service_key_or_none = ClientGUICommon.BetterChoice( self )
+        
+        self._service_key_or_none.addItem( 'current tag domain', None )
+        
+        for service in CG.client_controller.services_manager.GetServices( HC.ALL_TAG_SERVICES ):
+            
+            self._service_key_or_none.addItem( service.GetName(), service.GetServiceKey() )
+            
+        
+        self._tag_display_type = ClientGUICommon.BetterRadioBox(
+            self,
+            [
+                ( 'including siblings/parents', ClientTags.TAG_DISPLAY_DISPLAY_ACTUAL ),
+                ( 'ignoring siblings/parents', ClientTags.TAG_DISPLAY_STORAGE )
+            ],
+            vertical = True
+        )
+        
+        tt = 'Including siblings/parents will search on the "display" tag domain, which is what you see when normally searching for and browsing files. In "display", all siblings are merged to the ideal tag, and missing parents are filled in. Ignoring siblings/parents will search on the "storage" tag domain, which is what is actually recorded on disk (and what you see when editing tags).'
+        
+        self._tag_display_type.setToolTip( ClientGUIFunctions.WrapToolTip( tt ) )
+        
+        self._statuses = ClientGUICommon.BetterCheckBoxList( self )
+        
+        for status in (
+            HC.CONTENT_STATUS_CURRENT,
+            HC.CONTENT_STATUS_PENDING,
+            HC.CONTENT_STATUS_DELETED,
+            HC.CONTENT_STATUS_PETITIONED
+        ):
+            
+            self._statuses.Append( HC.content_status_string_lookup[ status ], status )
+            
+        
+        tt = 'Note that "deleted" and "petitioned" do not exist in the domain that computes siblings, so if you set to search these while "including siblings", you will get (slow!) results that have any deletion/petitioned record for any of the tags in the sibling group.'
+        
+        self._statuses.setToolTip( ClientGUIFunctions.WrapToolTip( tt ) )
+        
+        self._tag = QW.QLineEdit( self )
+        
+        self._tag.setPlaceholderText( 'tag' )
+        
+        from hydrus.client.gui.search import ClientGUIACDropdown
+        
+        self._tag_autocomplete = ClientGUIACDropdown.AutoCompleteDropdownTagsWrite(
+            self,
+            self._AutoCompleteEntersTags,
+            ClientLocation.LocationContext.STATICCreateSimple( CC.COMBINED_LOCAL_MEDIA_SERVICE_KEY ),
+            CC.COMBINED_TAG_SERVICE_KEY
+        )
+        
+        #
+        
+        predicate = self._GetPredicateToInitialisePanelWith( predicate )
+        
+        ( service_key_or_none, tag_display_type, statuses, tag ) = predicate.GetValue()
+        
+        self._inclusive.SetValue( predicate.IsInclusive() )
+        
+        self._service_key_or_none.SetValue( service_key_or_none )
+        
+        self._tag_display_type.SetValue( tag_display_type )
+        
+        self._statuses.SetValue( statuses )
+        
+        self._statuses.SetHeightBasedOnContents()
+        
+        self._tag.setText( tag )
+        
+        width = ClientGUIFunctions.ConvertTextToPixelWidth( self._tag, 48 )
+        
+        self._tag.setMinimumWidth( width )
+        
+        tag_vbox = QP.VBoxLayout()
+        
+        QP.AddToLayout( tag_vbox, self._tag, CC.FLAGS_EXPAND_PERPENDICULAR )
+        QP.AddToLayout( tag_vbox, self._tag_autocomplete, CC.FLAGS_EXPAND_PERPENDICULAR )
+        
+        #
+        
+        hbox = QP.HBoxLayout()
+        
+        QP.AddToLayout( hbox, ClientGUICommon.BetterStaticText( self,'system:' ), CC.FLAGS_CENTER_PERPENDICULAR )
+        QP.AddToLayout( hbox, self._inclusive, CC.FLAGS_CENTER_PERPENDICULAR )
+        QP.AddToLayout( hbox, self._service_key_or_none, CC.FLAGS_CENTER_PERPENDICULAR )
+        QP.AddToLayout( hbox, self._tag_display_type, CC.FLAGS_CENTER_PERPENDICULAR )
+        QP.AddToLayout( hbox, self._statuses, CC.FLAGS_CENTER_PERPENDICULAR )
+        QP.AddToLayout( hbox, tag_vbox, CC.FLAGS_CENTER_PERPENDICULAR_EXPAND_DEPTH )
+        
+        hbox.addStretch( 0 )
+        
+        self.setLayout( hbox )
+        
+        self.setFocusProxy( self._inclusive )
+        
+    
+    def _AutoCompleteEntersTags( self, tags ):
+        
+        tags = list( tags )
+        
+        if len( tags ) > 0:
+            
+            tag = tags[0]
+            
+            self._tag.setText( tag )
+            
+        
+    
+    def GetDefaultPredicate( self ):
+        
+        service_key_or_none = None
+        tag_display_type = ClientTags.TAG_DISPLAY_STORAGE
+        statuses = ( HC.CONTENT_STATUS_CURRENT, HC.CONTENT_STATUS_PENDING )
+        tag = ''
+        
+        return ClientSearchPredicate.Predicate( ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_TAG_ADVANCED, ( service_key_or_none, tag_display_type, statuses, tag ) )
+        
+    
+    def GetPredicates( self ):
+        
+        inclusive = self._inclusive.GetValue()
+        
+        service_key_or_none = self._service_key_or_none.GetValue()
+        tag_display_type = self._tag_display_type.GetValue()
+        statuses = tuple( self._statuses.GetValue() )
+        tag = self._tag.text()
+        
+        if len( statuses ) == 0:
+            
+            statuses = ( HC.CONTENT_STATUS_CURRENT, HC.CONTENT_STATUS_PENDING )
+            
+        
+        try:
+            
+            tag = HydrusTags.CleanTag( tag )
+            
+            HydrusTags.CheckTagNotEmpty( tag )
+            
+        except:
+            
+            tag = 'invalid tag'
+            
+        
+        predicates = ( ClientSearchPredicate.Predicate( ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_TAG_ADVANCED, ( service_key_or_none, tag_display_type, statuses, tag ), inclusive = inclusive ), )
         
         return predicates
         

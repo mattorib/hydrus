@@ -347,7 +347,7 @@ class Canvas( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
         
         self._canvas_key = HydrusData.GenerateKey()
         
-        self._maintain_pan_and_zoom = False
+        self._force_maintain_pan_and_zoom = False
         
         self._service_keys_to_services = {}
         
@@ -382,6 +382,7 @@ class Canvas( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
         CG.client_controller.sub( self, 'ZoomSwitch', 'canvas_zoom_switch' )
         CG.client_controller.sub( self, 'ManageTags', 'canvas_manage_tags' )
         CG.client_controller.sub( self, 'update', 'notify_new_colourset' )
+        CG.client_controller.sub( self, 'NotifyFilesNeedRedraw', 'notify_files_need_redraw' )
         
     
     def _Archive( self ):
@@ -697,7 +698,21 @@ class Canvas( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
             
             if my_size != media_container_size:
                 
-                self._media_container.ZoomReinit()
+                if self._new_options.GetBoolean( 'media_viewer_lock_current_zoom_type' ):
+                    
+                    self._media_container.ZoomToZoomType()
+                    
+                elif self._new_options.GetBoolean( 'media_viewer_lock_current_zoom' ):
+                    
+                    self._media_container.ZoomMaintainingZoom( self._current_media )
+                    
+                else:
+                    
+                    self._media_container.ZoomReinit()
+                    
+                
+                #always reset center on window resize
+                #if not self._new_options.GetBoolean( 'media_viewer_lock_current_pan' ):
                 
                 self._media_container.ResetCenterPosition()
                 
@@ -781,6 +796,22 @@ class Canvas( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
             media_rect = self._media_container.rect()
             
             return media_rect.contains( media_mouse_pos )
+            
+        
+    
+    def NotifyFilesNeedRedraw( self, hashes ):
+        
+        if self._current_media is not None:
+            
+            hash = self._current_media.GetHash()
+            
+            if hash in hashes:
+                
+                media = self._current_media
+                
+                self.ClearMedia()
+                self.SetMedia( media )
+                
             
         
     
@@ -1213,9 +1244,21 @@ class Canvas( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
                 
                 self._media_container.ZoomOut( zoom_center_type_override = ClientGUICanvasMedia.ZOOM_CENTERPOINT_VIEWER_CENTER )
                 
+            elif action == CAC.SIMPLE_RESET_PAN_TO_CENTER:
+                
+                self._media_container.ResetCenterPosition()
+                
             elif action == CAC.SIMPLE_SWITCH_BETWEEN_100_PERCENT_AND_CANVAS_ZOOM:
                 
                 self._media_container.ZoomSwitch()
+                
+            elif action == CAC.SIMPLE_SWITCH_BETWEEN_100_PERCENT_AND_CANVAS_FIT_AND_FILL_ZOOM:
+                
+                self._media_container.ZoomSwitchCanvasThenFill()
+                
+            elif action == CAC.SIMPLE_SWITCH_BETWEEN_100_PERCENT_AND_CANVAS_FIT_AND_FILL_ZOOM_VIEWER_CENTER :
+                
+                self._media_container.ZoomSwitchCanvasThenFill( zoom_center_type_override = ClientGUICanvasMedia.ZOOM_CENTERPOINT_VIEWER_CENTER )
                 
             elif action == CAC.SIMPLE_SWITCH_BETWEEN_100_PERCENT_AND_MAX_ZOOM:
                 
@@ -1229,13 +1272,49 @@ class Canvas( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
                 
                 self._media_container.Zoom100()
                 
+            elif action == CAC.SIMPLE_ZOOM_100_CENTER:
+                
+                self._media_container.Zoom100( zoom_center_type_override = ClientGUICanvasMedia.ZOOM_CENTERPOINT_VIEWER_CENTER )
+                
             elif action == CAC.SIMPLE_ZOOM_CANVAS:
                 
                 self._media_container.ZoomCanvas()
                 
+            elif action == CAC.SIMPLE_ZOOM_CANVAS_VIEWER_CENTER:
+                
+                self._media_container.ZoomCanvas( zoom_center_type_override = ClientGUICanvasMedia.ZOOM_CENTERPOINT_VIEWER_CENTER )
+                
+            elif action == CAC.SIMPLE_ZOOM_CANVAS_FILL_X:
+                
+                self._media_container.ZoomCanvasFillX()
+                
+            elif action == CAC.SIMPLE_ZOOM_CANVAS_FILL_X_VIEWER_CENTER:
+                
+                self._media_container.ZoomCanvasFillX( zoom_center_type_override = ClientGUICanvasMedia.ZOOM_CENTERPOINT_VIEWER_CENTER )
+                
+            elif action == CAC.SIMPLE_ZOOM_CANVAS_FILL_Y:
+                
+                self._media_container.ZoomCanvasFillY()
+                
+            elif action == CAC.SIMPLE_ZOOM_CANVAS_FILL_Y_VIEWER_CENTER:
+                
+                self._media_container.ZoomCanvasFillY( zoom_center_type_override = ClientGUICanvasMedia.ZOOM_CENTERPOINT_VIEWER_CENTER )
+                
+            elif action == CAC.SIMPLE_ZOOM_CANVAS_FILL_AUTO:
+                
+                self._media_container.ZoomCanvasFillAuto()
+                
+            elif action == CAC.SIMPLE_ZOOM_CANVAS_FILL_AUTO_VIEWER_CENTER:
+                
+                self._media_container.ZoomCanvasFillAuto( zoom_center_type_override = ClientGUICanvasMedia.ZOOM_CENTERPOINT_VIEWER_CENTER )
+                
             elif action == CAC.SIMPLE_ZOOM_DEFAULT:
                 
                 self._media_container.ZoomDefault()
+                
+            elif action == CAC.SIMPLE_ZOOM_DEFAULT_VIEWER_CENTER:
+                
+                self._media_container.ZoomDefault( zoom_center_type_override = ClientGUICanvasMedia.ZOOM_CENTERPOINT_VIEWER_CENTER )
                 
             elif action == CAC.SIMPLE_ZOOM_MAX:
                 
@@ -1333,14 +1412,25 @@ class Canvas( CAC.ApplicationCommandProcessorMixin, QW.QWidget ):
                 
             else:
                 
-                ( media_width, media_height ) = self._current_media.GetResolution()
-                
-                maintain_zoom = self._maintain_pan_and_zoom and previous_media is not None
-                maintain_pan = self._maintain_pan_and_zoom
-
                 if self._current_media.GetLocationsManager().IsLocal():
                     
-                    self._media_container.SetMedia( self._current_media, maintain_zoom, maintain_pan, start_paused = start_paused )
+                    maintain_zoom = False
+                    maintain_zoom_type = False
+                    maintain_pan = False
+                    
+                    if self._force_maintain_pan_and_zoom:
+                        
+                        maintain_zoom = True
+                        maintain_pan = True
+                        
+                    elif self.CANVAS_TYPE in CC.CANVAS_MEDIA_VIEWER_TYPES:
+                        
+                        maintain_zoom = self._new_options.GetBoolean( 'media_viewer_lock_current_zoom' )
+                        maintain_zoom_type = not maintain_zoom and self._new_options.GetBoolean( 'media_viewer_lock_current_zoom_type' )
+                        maintain_pan = self._new_options.GetBoolean( 'media_viewer_lock_current_pan' )
+                        
+                    
+                    self._media_container.SetMedia( self._current_media, maintain_zoom, maintain_zoom_type, maintain_pan, start_paused = start_paused )
                     
                 else:
                     
@@ -2304,7 +2394,7 @@ class CanvasWithHovers( Canvas ):
             can_hide = False
             
         
-        if ClientGUIFunctions.DialogIsOpen():
+        if ClientGUIFunctions.DialogIsOpenAndIAmNotItsChild( self ):
             
             can_hide = False
             
@@ -2346,6 +2436,11 @@ class CanvasWithHovers( Canvas ):
     def _TryToCloseWindow( self ):
         
         self.window().close()
+        
+    
+    def _TryToShowPageThatLaunchedUs( self ):
+        
+        pass
         
     
     def CleanBeforeDestroy( self ):
@@ -2479,6 +2574,12 @@ class CanvasWithHovers( Canvas ):
                 
                 self._TryToCloseWindow()
                 
+            elif action == CAC.SIMPLE_CLOSE_MEDIA_VIEWER_AND_FOCUS_TAB:
+                
+                self._TryToShowPageThatLaunchedUs()
+                
+                self._TryToCloseWindow()
+                
             elif action == CAC.SIMPLE_SWITCH_BETWEEN_FULLSCREEN_BORDERLESS_AND_REGULAR_FRAMED_WINDOW:
                 
                 self.parentWidget().FullscreenSwitch()
@@ -2554,7 +2655,7 @@ class CanvasFilterDuplicates( CanvasWithHovers ):
         
         self._my_shortcuts_handler.AddWindowToFilter( self._duplicates_right_hover )
         
-        self._maintain_pan_and_zoom = True
+        self._force_maintain_pan_and_zoom = True
         
         self._currently_fetching_pairs = False
         
@@ -3626,6 +3727,14 @@ class CanvasMediaList( CanvasWithHovers ):
         
         CG.client_controller.sub( self, 'ProcessContentUpdatePackage', 'content_updates_gui' )
         CG.client_controller.sub( self, 'ProcessServiceUpdates', 'service_updates_gui' )
+        
+    
+    def _TryToShowPageThatLaunchedUs( self ):
+        
+        if CG.client_controller.gui.GetPageFromPageKey( self._page_key ) is not None:
+            
+            CG.client_controller.gui.ShowPage( self._page_key )
+            
         
     
     def TryToDoPreClose( self ):

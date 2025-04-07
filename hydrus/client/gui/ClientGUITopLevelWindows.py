@@ -6,6 +6,7 @@ from hydrus.core import HydrusConstants as HC
 from hydrus.core import HydrusData
 
 from hydrus.client import ClientGlobals as CG
+from hydrus.client.gui import ClientGUIDialogsMessage
 from hydrus.client.gui import ClientGUIFunctions
 from hydrus.client.gui import ClientGUIShortcuts
 from hydrus.client.gui import QtPorting as QP
@@ -143,11 +144,8 @@ def GetSafeSize( tlw: QW.QWidget, min_size: QC.QSize, gravity ) -> QC.QSize:
     
     return QC.QSize( width, height )
     
+
 def ExpandTLWIfPossible( tlw: QW.QWidget, frame_key, desired_size_delta: QC.QSize ):
-    
-    new_options = CG.client_controller.new_options
-    
-    ( remember_size, remember_position, last_size, last_position, default_gravity, default_position, maximised, fullscreen ) = new_options.GetFrameLocation( frame_key )
     
     if not tlw.isMaximized() and not tlw.isFullScreen():
         
@@ -175,7 +173,10 @@ def ExpandTLWIfPossible( tlw: QW.QWidget, frame_key, desired_size_delta: QC.QSiz
         
         desired_size = QC.QSize( desired_width, desired_height )
         
-        new_size = GetSafeSize( tlw, desired_size, default_gravity )
+        # we don't want to expand to parent size here
+        gravity_for_expand_time = ( -1, -1 )
+        
+        new_size = GetSafeSize( tlw, desired_size, gravity_for_expand_time )
         
         if new_size.width() > current_width or new_size.height() > current_height:
             
@@ -187,6 +188,7 @@ def ExpandTLWIfPossible( tlw: QW.QWidget, frame_key, desired_size_delta: QC.QSiz
             
         
     
+
 def SaveTLWSizeAndPosition( tlw: QW.QWidget, frame_key ):
     
     if tlw.isMinimized():
@@ -204,7 +206,10 @@ def SaveTLWSizeAndPosition( tlw: QW.QWidget, frame_key ):
         fullscreen = tlw.isFullScreen()
         
     
-    ( safe_position, position_message ) = GetSafePosition( tlw.pos(), frame_key )
+    # I am informed that tlw.frameGeometry().topLeft() will account for a macOS system bar at the top
+    # tlw.pos() grabs from the client area, not the screen area
+    
+    ( safe_position, position_message ) = GetSafePosition( tlw.frameGeometry().topLeft(), frame_key )
     
     if safe_position is not None:
         
@@ -335,7 +340,7 @@ def SetInitialTLWSizeAndPosition( tlw: QW.QWidget, frame_key ):
             
             parent_tlw = parent_window.window()
             
-            desired_position = parent_tlw.pos() + QC.QPoint( CHILD_POSITION_PADDING, CHILD_POSITION_PADDING )
+            desired_position = parent_tlw.frameGeometry().topLeft() + QC.QPoint( CHILD_POSITION_PADDING, CHILD_POSITION_PADDING )
             
         
         slide_up_and_left = True
@@ -369,6 +374,16 @@ def SetInitialTLWSizeAndPosition( tlw: QW.QWidget, frame_key ):
     if safe_position is not None:
         
         tlw.move( safe_position )
+        
+        if HC.PLATFORM_MACOS:
+            
+            # macOS seems to move dialogs down like 26 pixels right after open. Our investigation suggested this was something OS side, rather than Qt
+            # we schedule this to overwrite whatever macOS wanted with what we want
+            # https://github.com/hydrusnetwork/hydrus/issues/1673
+            # https://github.com/hydrusnetwork/hydrus/issues/1681
+            
+            CG.client_controller.CallLaterQtSafe( tlw, 0.1, 'macOS position fix', tlw.move, safe_position )
+            
         
     
     if slide_up_and_left:
@@ -419,6 +434,7 @@ def SlideOffScreenTLWUpAndLeft( tlw ):
         tlw.move( safe_pos )
         
     
+
 class NewDialog( QP.Dialog ):
     
     def __init__( self, parent, title, do_not_activate = False ):
@@ -463,14 +479,68 @@ class NewDialog( QP.Dialog ):
             return False
             
         
-        if not self._TestValidityAndPresentVetoMessage( value ):
+        try:
             
-            return False
+            if not self._TestValidityAndPresentVetoMessage( value ):
+                
+                return False
+                
+            
+        except Exception as e:
+            
+            HydrusData.PrintException( e, do_wait = False )
+            
+            message = 'Hey, there was a problem when trying to check if this dialog was all good before close! This is probably because the data in the dialog was invalid somehow and my code cannot examine it properly. This error window is a last-ditch catch to ensure that you do not get locked into a non-closable dialog. Here is the summary of your error:'
+            message += '\n\n'
+            message += str( e )
+            message += '\n\n'
+            message += 'But the full trace has been written to your log. Please contact hydrus dev so he can fix whatever happened here!'
+            message += '\n\n'
+            
+            if value == QW.QDialog.DialogCode.Accepted:
+                
+                message += 'I will now dump you back to the dialog. Please hit "cancel".'
+                
+                ClientGUIDialogsMessage.ShowCritical( self, 'problem closing dialog', message )
+                
+                return False
+                
+            else:
+                
+                message += 'Somehow you got to this position despite not hitting "apply". I will now proceed, despite the error, trusting that a cancel will be safe.'
+                
+                ClientGUIDialogsMessage.ShowCritical( self, 'problem closing dialog', message )
+                
             
         
-        if not self._UserIsOKToClose( value ):
+        try:
             
-            return False
+            if not self._UserIsOKToClose( value ):
+                
+                return False
+                
+            
+        except Exception as e:
+            
+            HydrusData.PrintException( e, do_wait = False )
+            
+            message = 'Hey, there was a problem when trying to check if we could close this dialog! This is probably because the data in the dialog was invalid somehow and my code cannot examine it properly. This error window is a last-ditch catch to ensure that you do not get locked into a non-closable dialog. Here is the summary of your error:'
+            message += '\n\n'
+            message += str( e )
+            message += '\n\n'
+            message += 'But the full trace has been written to your log. Please contact hydrus dev so he can fix whatever happened here!'
+            
+            if value == QW.QDialog.DialogCode.Accepted:
+                
+                message += '\n\n'
+                message += 'It looks like you were applying, so you have to make a decision before any bad data is saved:'
+                message += '\n'
+                message += '- If there is a parent dialog, cancel it immediately after moving on from this error notification.'
+                message += '\n'
+                message += '- If there is no parent dialog--i.e. when this dialog closes, you will be going back to the Main GUI--I think you should kill your hydrus process now. Do not risk saving broken data!'
+                
+            
+            ClientGUIDialogsMessage.ShowCritical( self, 'problem closing dialog', message )
             
         
         if value == QW.QDialog.DialogCode.Rejected:
@@ -621,6 +691,7 @@ class NewDialog( QP.Dialog ):
             
         
     
+
 class DialogThatResizes( NewDialog ):
     
     def __init__( self, parent, title, frame_key, do_not_activate = False ):
@@ -635,6 +706,7 @@ class DialogThatResizes( NewDialog ):
         SaveTLWSizeAndPosition( self, self._frame_key )
         
     
+
 class Frame( QW.QWidget ):
     
     def __init__( self, parent, title ):
@@ -694,6 +766,7 @@ class MainFrame( QW.QMainWindow ):
         self.CleanBeforeDestroy()
         
     
+
 class FrameThatResizes( Frame ):
     
     def __init__( self, parent, title, frame_key ):
@@ -723,7 +796,11 @@ class FrameThatResizes( Frame ):
         return True # was: event.ignore()
         
     
-class FrameThatResizesWithHovers( FrameThatResizes ): pass
+
+class FrameThatResizesWithHovers( FrameThatResizes ):
+    
+    pass
+    
 
 class MainFrameThatResizes( MainFrame ):
 

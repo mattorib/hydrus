@@ -187,6 +187,21 @@ def DialogIsOpen():
     return False
     
 
+def DialogIsOpenAndIAmNotItsChild( win: QW.QWidget ):
+    
+    tlws = QW.QApplication.topLevelWidgets()
+    
+    for tlw in tlws:
+        
+        if isinstance( tlw, QP.Dialog ) and tlw.isModal() and not IsQtAncestor( win, tlw, through_tlws = True):
+            
+            return True
+            
+        
+    
+    return False
+    
+
 def DrawText( painter, x, y, text ):
     
     ( size, text ) = GetTextSizeFromPainter( painter, text )
@@ -366,6 +381,20 @@ def MouseIsOnMyDisplay( window ):
     
     return mouse_screen is window_screen
     
+
+def MouseIsOverOneOfOurWindows():
+    
+    for window in QW.QApplication.topLevelWidgets():
+        
+        if MouseIsOverWidget( window ):
+            
+            return True
+            
+        
+    
+    return False
+    
+
 def MouseIsOverWidget( win: QW.QWidget ):
     
     # note this is different from win.underMouse(), which in different situations seems to be more complicated than just a rect test

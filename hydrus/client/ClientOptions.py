@@ -246,6 +246,7 @@ class ClientOptions( HydrusSerialisable.SerialisableBase ):
             'focus_preview_on_ctrl_click_only_static' : False,
             'focus_preview_on_shift_click' : False,
             'focus_preview_on_shift_click_only_static' : False,
+            'focus_media_tab_on_viewer_close_if_possible' : False,
             'fade_sibling_connector' : True,
             'use_custom_sibling_connector_colour' : False,
             'hide_uninteresting_modified_time' : True,
@@ -254,6 +255,12 @@ class ClientOptions( HydrusSerialisable.SerialisableBase ):
             'draw_top_right_hover_in_media_viewer_background' : True,
             'draw_notes_hover_in_media_viewer_background' : True,
             'draw_bottom_right_index_in_media_viewer_background' : True,
+            'disable_tags_hover_in_media_viewer': False,
+            'disable_top_right_hover_in_media_viewer': False,
+            'media_viewer_window_always_on_top': False,
+            'media_viewer_lock_current_zoom_type': False,
+            'media_viewer_lock_current_zoom': False,
+            'media_viewer_lock_current_pan': False,
             'allow_blurhash_fallback' : True,
             'fade_thumbnails' : True,
             'slideshow_always_play_duration_media_once_through' : False,
@@ -283,6 +290,10 @@ class ClientOptions( HydrusSerialisable.SerialisableBase ):
             'mpv_loop_playlist_instead_of_file' : False,
             'draw_thumbnail_rating_background' : True,
             'show_destination_page_when_dnd_url' : True,
+            'confirm_non_empty_downloader_page_close' : True,
+            'confirm_all_page_closes' : False,
+            'refresh_search_page_on_system_limited_sort_changed' : True,
+            'do_not_setgeometry_on_an_mpv' : False,
         }
         
         #
@@ -429,13 +440,13 @@ class ClientOptions( HydrusSerialisable.SerialisableBase ):
             'duplicate_comparison_score_nicer_ratio' : 10,
             'duplicate_comparison_score_has_audio' : 20,
             'thumbnail_cache_size' : 1024 * 1024 * 32,
-            'image_cache_size' : 1024 * 1024 * 384,
+            'image_cache_size' : 1024 * 1024 * 1024,
             'image_tile_cache_size' : 1024 * 1024 * 256,
             'thumbnail_cache_timeout' : 86400,
             'image_cache_timeout' : 600,
             'image_tile_cache_timeout' : 300,
             'image_cache_storage_limit_percentage' : 25,
-            'image_cache_prefetch_limit_percentage' : 10,
+            'image_cache_prefetch_limit_percentage' : 15,
             'media_viewer_prefetch_delay_base_ms' : 100,
             'media_viewer_prefetch_num_previous' : 2,
             'media_viewer_prefetch_num_next' : 3,
@@ -483,7 +494,9 @@ class ClientOptions( HydrusSerialisable.SerialisableBase ):
             'gallery_page_status_update_time_minimum_ms' : 1000,
             'gallery_page_status_update_time_ratio_denominator' : 30,
             'watcher_page_status_update_time_minimum_ms' : 1000,
-            'watcher_page_status_update_time_ratio_denominator' : 30
+            'watcher_page_status_update_time_ratio_denominator' : 30,
+            'media_viewer_default_zoom_type_override' : ClientGUICanvasMedia.MEDIA_VIEWER_ZOOM_TYPE_DEFAULT_FOR_FILETYPE,
+            'preview_default_zoom_type_override' : ClientGUICanvasMedia.MEDIA_VIEWER_ZOOM_TYPE_DEFAULT_FOR_FILETYPE
         }
         
         #

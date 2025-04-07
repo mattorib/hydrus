@@ -54,6 +54,18 @@ def BytesToNoneOrHex( b: typing.Optional[ bytes ] ):
         
     
 
+def HexToNoneOrBytes( h: typing.Optional[ str ] ):
+    
+    if h is None:
+        
+        return None
+        
+    else:
+        
+        return bytes.fromhex( h )
+        
+    
+
 def CalculateScoreFromRating( count, rating ):
     
     # https://www.evanmiller.org/how-not-to-sort-by-average-rating.html
@@ -377,7 +389,7 @@ def PrintExceptionTuple( etype, value, tb, do_wait = True ):
     
     if tb is None:
         
-        trace = 'No error trace--here is the stack:' + '\n' + ''.join( traceback.format_stack() )
+        trace = 'No error trace!'
         
     else:
         
@@ -392,8 +404,7 @@ def PrintExceptionTuple( etype, value, tb, do_wait = True ):
     
     stack = stack.rstrip()
     
-    message = f'''
-================ Exception ================
+    message = f'''================ Exception ================
 {etype.__name__}: {value}
 ================ Traceback ================
 {trace}
@@ -401,12 +412,14 @@ def PrintExceptionTuple( etype, value, tb, do_wait = True ):
 {stack}
 =================== End ==================='''
     
-    DebugPrint( message )
+    DebugPrint( '\n' + message )
     
     if do_wait:
         
         time.sleep( 0.2 )
         
+    
+    return message
     
 
 ShowException = PrintException

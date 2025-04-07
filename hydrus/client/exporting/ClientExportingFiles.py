@@ -19,6 +19,7 @@ from hydrus.client import ClientPaths
 from hydrus.client import ClientThreading
 from hydrus.client.metadata import ClientContentUpdates
 from hydrus.client.metadata import ClientMetadataMigration
+from hydrus.client.metadata import ClientMetadataMigrationExporters
 from hydrus.client.metadata import ClientTags
 from hydrus.client.search import ClientSearchFileSearchContext
 
@@ -543,6 +544,8 @@ class ExportFolder( HydrusSerialisable.SerialisableBaseNamed ):
         
         sync_paths = set()
         
+        sidecar_paths_that_did_not_exist_before_this_run = set()
+        
         client_files_manager = CG.client_controller.client_files_manager
         
         num_actually_copied = 0
@@ -626,6 +629,8 @@ class ExportFolder( HydrusSerialisable.SerialisableBaseNamed ):
                         
                         actually_copied = True
                         
+                        num_actually_copied += 1
+                        
                     else:
                         
                         actually_copied = False
@@ -645,14 +650,35 @@ class ExportFolder( HydrusSerialisable.SerialisableBaseNamed ):
                     
                     num_actually_copied += 1
                     
-                    for metadata_router in self._metadata_routers:
+                
+            
+            sync_paths.add( dest_path )
+            
+            for metadata_router in self._metadata_routers:
+                
+                metadata_router = typing.cast( ClientMetadataMigration.SingleFileMetadataRouter, metadata_router )
+                
+                metadata_exporter = metadata_router.GetExporter()
+                
+                if isinstance( metadata_exporter, ClientMetadataMigrationExporters.SingleFileMetadataExporterSidecar ):
+                    
+                    # we have to be careful with path.exists regarding multiple routers going to one sidecar
+                    
+                    sidecar_path = metadata_exporter.GetExportPath( dest_path )
+                    
+                    if not os.path.exists( sidecar_path ):
+                        
+                        sidecar_paths_that_did_not_exist_before_this_run.add( sidecar_path )
+                        
+                    
+                    if sidecar_path in sidecar_paths_that_did_not_exist_before_this_run:
                         
                         metadata_router.Work( media_result, dest_path )
                         
                     
+                    sync_paths.add( sidecar_path )
+                    
                 
-            
-            sync_paths.add( dest_path )
             
         
         if num_actually_copied > 0:
@@ -716,7 +742,7 @@ class ExportFolder( HydrusSerialisable.SerialisableBaseNamed ):
                 
             
         
-        if self._delete_from_client_after_export:
+        if not self._export_type == HC.EXPORT_FOLDER_TYPE_SYNCHRONISE and self._delete_from_client_after_export:
             
             my_files_media_results = [ media_result for media_result in media_results if CC.COMBINED_LOCAL_MEDIA_SERVICE_KEY in media_result.GetLocationsManager().GetCurrent() ]
             

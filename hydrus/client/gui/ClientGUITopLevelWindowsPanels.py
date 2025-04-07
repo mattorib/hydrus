@@ -79,6 +79,7 @@ class DialogThatTakesScrollablePanel( ClientGUITopLevelWindows.DialogThatResizes
         ClientGUITopLevelWindows.SetInitialTLWSizeAndPosition( self, self._frame_key )
         
     
+
 class DialogNullipotent( DialogThatTakesScrollablePanel ):
     
     def _GetButtonBox( self ):

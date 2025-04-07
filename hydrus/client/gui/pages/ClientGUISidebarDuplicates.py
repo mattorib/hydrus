@@ -163,15 +163,7 @@ class SidebarDuplicateFilter( ClientGUISidebarCore.Sidebar ):
         
         self._main_notebook.addTab( self._main_left_panel, 'preparation' )
         self._main_notebook.addTab( self._main_right_panel, 'filtering' )
-        
-        if CG.client_controller.new_options.GetBoolean( 'advanced_mode' ):
-            
-            self._main_notebook.addTab( self._duplicates_auto_resolution_panel, 'auto-resolution' )
-            
-        else:
-            
-            self._duplicates_auto_resolution_panel.setVisible( False )
-            
+        self._main_notebook.addTab( self._duplicates_auto_resolution_panel, 'auto-resolution' )
         
         self._main_notebook.setCurrentWidget( self._main_right_panel )
         
@@ -302,7 +294,8 @@ class SidebarDuplicateFilter( ClientGUISidebarCore.Sidebar ):
         
         self._page_manager.SetVariable( 'synchronised', synchronised )
         
-        self._SetLocationContext( potential_duplicates_search_context.GetFileSearchContext1().GetLocationContext() )
+        self.locationChanged.emit( potential_duplicates_search_context.GetFileSearchContext1().GetLocationContext() )
+        self.tagContextChanged.emit( potential_duplicates_search_context.GetFileSearchContext1().GetTagContext() )
         
         if synchronised:
             
@@ -403,11 +396,6 @@ class SidebarDuplicateFilter( ClientGUISidebarCore.Sidebar ):
     def _ShowPotentialDupes( self, hashes ):
         
         potential_duplicates_search_context = self._potential_duplicates_search_context.GetValue()
-        
-        # I think this forces the matter if we are not currently synchronised, maybe it is redundant though, not sure
-        location_context = potential_duplicates_search_context.GetFileSearchContext1().GetLocationContext()
-        
-        self._SetLocationContext( location_context )
         
         if len( hashes ) > 0:
             

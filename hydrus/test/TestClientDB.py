@@ -823,7 +823,7 @@ class TestClientDB( unittest.TestCase ):
         predicates.append( ClientSearchPredicate.Predicate( ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_EVERYTHING, count = ClientSearchPredicate.PredicateCount.STATICCreateCurrentCount( 1 ) ) )
         predicates.append( ClientSearchPredicate.Predicate( ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_INBOX, count = ClientSearchPredicate.PredicateCount.STATICCreateCurrentCount( 1 ) ) )
         predicates.append( ClientSearchPredicate.Predicate( ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_ARCHIVE, count = ClientSearchPredicate.PredicateCount.STATICCreateCurrentCount( 0 ) ) )
-        predicates.extend( [ ClientSearchPredicate.Predicate( predicate_type ) for predicate_type in [ ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_NUM_TAGS, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_LIMIT, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_SIZE, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_TIME, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_URLS, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_FILE_PROPERTIES, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_HASH, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_DIMENSIONS, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_DURATION, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_NOTES, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_NUM_WORDS, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_MIME, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_RATING, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_SIMILAR_TO, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_FILE_SERVICE, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_TAG_AS_NUMBER, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_FILE_RELATIONSHIPS, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_FILE_VIEWING_STATS ] ] )
+        predicates.extend( [ ClientSearchPredicate.Predicate( predicate_type ) for predicate_type in [ ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_NUM_TAGS, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_LIMIT, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_SIZE, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_TIME, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_URLS, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_FILE_PROPERTIES, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_HASH, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_DIMENSIONS, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_DURATION, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_NOTES, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_NUM_WORDS, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_MIME, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_RATING, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_SIMILAR_TO, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_FILE_SERVICE, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_TAG_ADVANCED, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_TAG_AS_NUMBER, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_FILE_RELATIONSHIPS, ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_FILE_VIEWING_STATS ] ] )
         
         self.assertEqual( set( result ), set( predicates ) )
         
@@ -1154,7 +1154,7 @@ class TestClientDB( unittest.TestCase ):
         
         fsc = ClientSearchFileSearchContext.FileSearchContext( location_context = location_context, predicates = [] )
         
-        page_manager = ClientGUIPageManager.CreatePageManagerQuery( 'search', fsc, True )
+        page_manager = ClientGUIPageManager.CreatePageManagerQuery( 'search', fsc )
         
         page_name = page_manager.GetPageName()
         
@@ -1176,7 +1176,7 @@ class TestClientDB( unittest.TestCase ):
         
         fsc = ClientSearchFileSearchContext.FileSearchContext( location_context = location_context, tag_context = tag_context, predicates = [] )
         
-        page_manager = ClientGUIPageManager.CreatePageManagerQuery( 'search', fsc, False )
+        page_manager = ClientGUIPageManager.CreatePageManagerQuery( 'search', fsc )
         
         page_name = page_manager.GetPageName()
         
@@ -1196,7 +1196,7 @@ class TestClientDB( unittest.TestCase ):
         
         fsc = ClientSearchFileSearchContext.FileSearchContext( location_context = location_context, predicates = [ ClientSearchPredicate.SYSTEM_PREDICATE_ARCHIVE ] )
         
-        page_manager = ClientGUIPageManager.CreatePageManagerQuery( 'files', fsc, True )
+        page_manager = ClientGUIPageManager.CreatePageManagerQuery( 'files', fsc )
         
         page_name = page_manager.GetPageName()
         
@@ -1216,7 +1216,7 @@ class TestClientDB( unittest.TestCase ):
         
         fsc = ClientSearchFileSearchContext.FileSearchContext( location_context = location_context, predicates = [ ClientSearchPredicate.Predicate( ClientSearchPredicate.PREDICATE_TYPE_TAG, 'tag', count = ClientSearchPredicate.PredicateCount.STATICCreateStaticCount( 1, 3 ) ) ] )
         
-        page_manager = ClientGUIPageManager.CreatePageManagerQuery( 'wew lad', fsc, True )
+        page_manager = ClientGUIPageManager.CreatePageManagerQuery( 'wew lad', fsc )
         
         page_name = page_manager.GetPageName()
         
@@ -1236,7 +1236,7 @@ class TestClientDB( unittest.TestCase ):
         
         fsc = ClientSearchFileSearchContext.FileSearchContext( location_context = location_context, predicates = [ ClientSearchPredicate.Predicate( ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_RATING, ( '>', 0.2, TestController.LOCAL_RATING_NUMERICAL_SERVICE_KEY ) ), ClientSearchPredicate.Predicate( ClientSearchPredicate.PREDICATE_TYPE_SYSTEM_FILE_SERVICE, ( True, HC.CONTENT_STATUS_CURRENT, CC.LOCAL_FILE_SERVICE_KEY ) ) ] )
         
-        page_manager = ClientGUIPageManager.CreatePageManagerQuery( 'files', fsc, True )
+        page_manager = ClientGUIPageManager.CreatePageManagerQuery( 'files', fsc )
         
         page_name = page_manager.GetPageName()
         
@@ -1668,6 +1668,7 @@ class TestClientDB( unittest.TestCase ):
             'size_deleted': 0,
             'size_inbox': 1027308,
             'total_alternate_files': 0,
+            'total_alternate_groups': 0,
             'total_duplicate_files': 0,
             'total_viewtime': (0, 0, 0, 0)
         }
@@ -1693,6 +1694,7 @@ class TestClientDB( unittest.TestCase ):
             'size_deleted': 0,
             'size_inbox': 456774,
             'total_alternate_files': 0,
+            'total_alternate_groups': 0,
             'total_duplicate_files': 0,
             'total_viewtime': (0, 0, 0, 0)
         }

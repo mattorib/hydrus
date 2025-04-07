@@ -3617,8 +3617,8 @@ ATTACH "client.mappings.db" as external_mappings;'''
         debug_modes = ClientGUIMenus.GenerateMenu( debug_menu )
         
         ClientGUIMenus.AppendMenuCheckItem( debug_modes, 'force idle mode', 'Make the client consider itself idle and fire all maintenance routines right now. This may hang the gui for a while.', HG.force_idle_mode, self._SwitchBoolean, 'force_idle_mode' )
-        ClientGUIMenus.AppendMenuCheckItem( debug_modes, 'thumbnail debug mode', 'Show some thumbnail debug info.', HG.thumbnail_debug_mode, self._SwitchBoolean, 'thumbnail_debug_mode' )
         ClientGUIMenus.AppendMenuItem( debug_modes, 'simulate a wake from sleep', 'Tell the controller to pretend that it just woke up from sleep.', self._controller.SimulateWakeFromSleepEvent )
+        ClientGUIMenus.AppendMenuCheckItem( debug_modes, 'thumbnail debug mode', 'Show some thumbnail debug info.', HG.thumbnail_debug_mode, self._SwitchBoolean, 'thumbnail_debug_mode' )
         
         ClientGUIMenus.AppendMenu( debug_menu, debug_modes, 'debug modes' )
         
@@ -7717,7 +7717,7 @@ The password is cleartext here but obscured in the entry dialog. Enter a blank p
     
     def GetTotalPageCounts( self ):
         
-        total_active_page_count = self._notebook.GetNumPages()
+        total_active_page_count = self._notebook.GetNumPagesHeld()
         
         total_closed_page_count = len( self._closed_pages )
         
@@ -8795,7 +8795,7 @@ The password is cleartext here but obscured in the entry dialog. Enter a blank p
         
         if not self._controller.DoingFastExit():
             
-            reasons_and_pages = self._notebook.GetTestAbleToCloseData()
+            reasons_and_pages = self._notebook.GetAbleToCloseData( for_session_close = True )
             
             if HC.options[ 'confirm_client_exit' ] or len( reasons_and_pages ) > 0:
                 
