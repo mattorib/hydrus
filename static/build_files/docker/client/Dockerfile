@@ -1,4 +1,4 @@
-FROM m1k1o/neko:base
+FROM ghcr.io/m1k1o/neko/base:latest
 
 HEALTHCHECK --interval=20s --timeout=10s --retries=3 --start-period=30s CMD ! supervisorctl status | grep -v RUNNING
 ENTRYPOINT ["/bin/bash", "/opt/hydrus/static/build_files/docker/client/entrypoint.sh"]
@@ -13,8 +13,8 @@ RUN pip install -r /tmp/requirements.txt
 
 RUN mkdir -p /opt/hydrus
 
-COPY --chown=hydrus . /opt/hydrus
-COPY --chown=hydrus --from=suika/swftools:2013-04-09-1007 /swftools/swfrender /opt/hydrus/bin/swfrender_linux
+COPY . /opt/hydrus
+COPY --from=docker.io/suika/swftools:2013-04-09-1007 /swftools/swfrender /opt/hydrus/bin/swfrender_linux
 
 COPY ./static/build_files/docker/client/supervisord.conf /etc/neko/supervisord/hydrus.conf
 COPY ./static/build_files/docker/client/openbox.xml /etc/neko/openbox.xml
@@ -23,7 +23,3 @@ RUN ln -fs /usr/bin/python3 /usr/bin/python && ln -fs /usr/bin/pip3 /usr/bin/pip
 
 VOLUME /opt/hydrus/db
 
-ENV UID=${UID:-1000} \
-    GID=${GID:-1000} \
-    DB_DIR=/opt/hydrus/db \
-    HYDRUS_EXTRA=""
